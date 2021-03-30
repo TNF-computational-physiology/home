@@ -7,3 +7,15 @@
 #
 layout: home
 ---
+
+# Overview
+
+## Projects
+
+### EEG microstates
+### Resting state EEG patterns
+
+## Teaching
+
+## Previous Research
+
