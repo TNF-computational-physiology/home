@@ -4,7 +4,7 @@ title: Teaching
 permalink: /teaching/
 ---
 
-Useful links:
+Courses:
 ---
 
 - Physiology
