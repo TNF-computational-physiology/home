@@ -8,10 +8,6 @@
 layout: home
 ---
 
-# Computational Physiology at the Translational Neuroscience Facility
-
-The [Translational Neuroscience Facility](https://medicalsciences.med.unsw.edu.au/research/groups/translational-neuroscience-facility) at [UNSW Sydney](https://www.unsw.edu.au/) runs a computational theme, covering the following topics:
-
 ## Research
 - Computational analysis of [resting-state EEG patterns](https://frederic-vw.github.io/eeg-patterns)
 - [EEG microstates](https://frederic-vw.github.io/eeg_microstates)
