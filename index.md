@@ -10,8 +10,9 @@ layout: home
 
 ## Research
 
-### EEG microstates
-### Resting state EEG patterns
+- [EEG microstates](https://frederic-vw.github.io/eeg_microstates)
+- [Resting state EEG patterns](https://frederic-vw.github.io/eeg-patterns)
+- [Time series analysis](https://frederic-vw.github.io/AIF-PAIF)
 
 ## Teaching
 
