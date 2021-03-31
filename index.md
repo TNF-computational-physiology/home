@@ -8,7 +8,7 @@
 layout: home
 ---
 
-## Projects
+## Research projects
 
 ### EEG microstates
 ### Resting state EEG patterns
