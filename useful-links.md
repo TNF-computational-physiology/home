@@ -1,7 +1,7 @@
 ---
 layout: page
-title: Links
-permalink: /links/
+title: Links etc.
+permalink: /useful-links/
 ---
 
 Useful links:
