@@ -1,13 +1,12 @@
 ---
 layout: page
-title: Research
-permalink: /research/
+title: Teaching
+permalink: /teaching/
 ---
 
 Useful links:
 ---
 
-- [software](https://frederic-vw.github.io/)
-- [loop](https://loop.frontiersin.org/people/28419/overview)
-- [ResearchGate](https://www.researchgate.net/profile/Frederic-Wegner)
-- [my UNSW profile](https://research.unsw.edu.au/people/dr-frederic-von-wegner)
+- Physiology
+- Neuroscience
+- Muscle & Motor Control
