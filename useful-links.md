@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Links etc.
+title: Links
 permalink: /useful-links/
 ---
 
