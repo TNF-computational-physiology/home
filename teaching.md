@@ -10,7 +10,7 @@ Moodle utils:
 
 Courses:
 ---
-- [UNSW](https://medicalsciences.med.unsw.edu.au/people/dr-frederic-von-wegner)
+- my [UNSW](https://medicalsciences.med.unsw.edu.au/people/dr-frederic-von-wegner) profile
 - Physiology
 - Neuroscience
 - Muscle & Motor Control
