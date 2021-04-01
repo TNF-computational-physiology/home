@@ -6,7 +6,7 @@ permalink: /teaching/
 
 Moodle utils:
 ---
-- Moodle code snippets: https://frederic-vw.github.io/moodle-utils/
+- [Moodle code snippets](https://frederic-vw.github.io/moodle-utils/)
 
 Courses:
 ---
