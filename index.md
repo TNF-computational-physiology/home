@@ -15,6 +15,4 @@ layout: home
 - Computational models of neural activity
 - Time-series analysis of cardio-respiratory data
 - Stochastic simulation of Ca<sup>2+</sup> cellular signals ([code](https://github.com/nwieder/SSTS))
-
-## Teaching
-- coming soon... ([UNSW](https://medicalsciences.med.unsw.edu.au/people/dr-frederic-von-wegner))
+- 
