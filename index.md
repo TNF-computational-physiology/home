@@ -8,7 +8,7 @@
 layout: home
 ---
 
-## Research
+# Research
 - Computational analysis of [resting-state EEG patterns](https://frederic-vw.github.io/eeg-patterns)
 - [EEG microstates](https://frederic-vw.github.io/eeg_microstates)
 - [Time series analysis](https://frederic-vw.github.io/AIF-PAIF)
