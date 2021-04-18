@@ -6,9 +6,10 @@
 # See: https://jekyllrb.com/docs/themes/#overriding-theme-defaults
 #
 layout: home
+title: Research
 ---
 
-# Research
+# Projects
 - Computational analysis of [resting-state EEG patterns](https://frederic-vw.github.io/eeg-patterns)
 - [EEG microstates](https://frederic-vw.github.io/eeg_microstates)
 - [Time series analysis](https://frederic-vw.github.io/AIF-PAIF)
