@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Kick-off"
+title: "reveal-js"
 categories: misc
 ---
 
-Check out reveal.js: https://revealjs.com/
+An alternative to power-point presentations: https://revealjs.com/
