@@ -32,6 +32,6 @@ Visit the homepage of the [Translational Neuroscience Facility](https://medicals
 7. [Respiratory waveform analysis](https://github.com/Frederic-vW/picsdb)
 
 # Publications
-![publications](pubs.png)](publications.md)
+[![publications](pubs.png)](publications.md)
 
 # News
