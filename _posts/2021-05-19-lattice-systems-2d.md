@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "2D models of neuronal excitability in Python + Julia"
+title: "2D models of neuronal excitability in Python & Julia"
 categories: misc
 ---
 
