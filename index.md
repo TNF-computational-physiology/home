@@ -19,3 +19,14 @@ title: Research
 - Stochastic simulation of Ca<sup>2+</sup> cellular signals ([code](https://github.com/nwieder/SSTS))
 
 Visit the homepage of the [Translational Neuroscience Facility](https://medicalsciences.med.unsw.edu.au/research/groups/translational-neuroscience-facility) at UNSW.
+
+# Software
+1. EEG microstate analysis
+  - [Python package](https://github.com/Frederic-vW/eeg_microstates)
+  - [Online](https://github.com/Frederic-vW/msa-online)
+2. [Autoinformation analysis](https://github.com/Frederic-vW/AIF-PAIF)
+3. [Hodgkin-Huxley 2D model](https://github.com/Frederic-vW/hodgkin-huxley-2d)
+4. [Morris-Lecar 2D model](https://github.com/Frederic-vW/morris-lecar-2d)
+5. [FitzHugh-Nagumo 2D model](https://github.com/Frederic-vW/fitzhugh-nagumo-2d)
+6. [IzhikevichH 2D model](https://github.com/Frederic-vW/izhikevich-2d)
+7. [Respiratory waveform analysis](https://github.com/Frederic-vW/picsdb)
