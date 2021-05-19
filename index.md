@@ -31,7 +31,9 @@ Visit the homepage of the [Translational Neuroscience Facility](https://medicals
 6. [IzhikevichH 2D model](https://github.com/Frederic-vW/izhikevich-2d)
 7. [Respiratory waveform analysis](https://github.com/Frederic-vW/picsdb)
 
+<!--
 # Publications
 [![publications](pubs_200px.png)](publications.md)
+-->
 
 # News
