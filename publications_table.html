@@ -1,0 +1,1943 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>JabRef references</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script type="text/javascript">
+<!--
+// QuickSearch script for JabRef HTML export 
+// Version: 3.0
+//
+// Copyright (c) 2006-2011, Mark Schenk
+//
+// This software is distributed under a Creative Commons Attribution 3.0 License
+// http://creativecommons.org/licenses/by/3.0/
+//
+// Features:
+// - intuitive find-as-you-type searching
+//    ~ case insensitive
+//    ~ ignore diacritics (optional)
+//
+// - search with/without Regular Expressions
+// - match BibTeX key
+//
+
+// Search settings
+var searchAbstract = true;	// search in abstract
+var searchReview = true;	// search in review
+
+var noSquiggles = true; 	// ignore diacritics when searching
+var searchRegExp = false; 	// enable RegExp searches
+
+
+if (window.addEventListener) {
+	window.addEventListener("load",initSearch,false); }
+else if (window.attachEvent) {
+	window.attachEvent("onload", initSearch); }
+
+function initSearch() {
+	// check for quick search table and searchfield
+	if (!document.getElementById('qs_table')||!document.getElementById('quicksearch')) { return; }
+
+	// load all the rows and sort into arrays
+	loadTableData();
+	
+	//find the query field
+	qsfield = document.getElementById('qs_field');
+
+	// previous search term; used for speed optimisation
+	prevSearch = '';
+
+	//find statistics location
+	stats = document.getElementById('stat');
+	setStatistics(-1);
+	
+	// set up preferences
+	initPreferences();
+
+	// shows the searchfield
+	document.getElementById('quicksearch').style.display = 'block';
+	document.getElementById('qs_field').onkeyup = quickSearch;
+}
+
+function loadTableData() {
+	// find table and appropriate rows
+	searchTable = document.getElementById('qs_table');
+	var allRows = searchTable.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+	// split all rows into entryRows and infoRows (e.g. abstract, review, bibtex)
+	entryRows = new Array(); infoRows = new Array(); absRows = new Array(); revRows = new Array();
+
+	// get data from each row
+	entryRowsData = new Array(); absRowsData = new Array(); revRowsData = new Array(); 
+	
+	BibTeXKeys = new Array();
+	
+	for (var i=0, k=0, j=0; i<allRows.length;i++) {
+		if (allRows[i].className.match(/entry/)) {
+			entryRows[j] = allRows[i];
+			entryRowsData[j] = stripDiacritics(getTextContent(allRows[i]));
+			allRows[i].id ? BibTeXKeys[j] = allRows[i].id : allRows[i].id = 'autokey_'+j;
+			j ++;
+		} else {
+			infoRows[k++] = allRows[i];
+			// check for abstract/review
+			if (allRows[i].className.match(/abstract/)) {
+				absRows.push(allRows[i]);
+				absRowsData[j-1] = stripDiacritics(getTextContent(allRows[i]));
+			} else if (allRows[i].className.match(/review/)) {
+				revRows.push(allRows[i]);
+				revRowsData[j-1] = stripDiacritics(getTextContent(allRows[i]));
+			}
+		}
+	}
+	//number of entries and rows
+	numEntries = entryRows.length;
+	numInfo = infoRows.length;
+	numAbs = absRows.length;
+	numRev = revRows.length;
+}
+
+function quickSearch(){
+	
+	tInput = qsfield;
+
+	if (tInput.value.length == 0) {
+		showAll();
+		setStatistics(-1);
+		qsfield.className = '';
+		return;
+	} else {
+		t = stripDiacritics(tInput.value);
+
+		if(!searchRegExp) { t = escapeRegExp(t); }
+			
+		// only search for valid RegExp
+		try {
+			textRegExp = new RegExp(t,"i");
+			closeAllInfo();
+			qsfield.className = '';
+		}
+			catch(err) {
+			prevSearch = tInput.value;
+			qsfield.className = 'invalidsearch';
+			return;
+		}
+	}
+	
+	// count number of hits
+	var hits = 0;
+
+	// start looping through all entry rows
+	for (var i = 0; cRow = entryRows[i]; i++){
+
+		// only show search the cells if it isn't already hidden OR if the search term is getting shorter, then search all
+		if(cRow.className.indexOf('noshow')==-1 || tInput.value.length <= prevSearch.length){
+			var found = false; 
+
+			if (entryRowsData[i].search(textRegExp) != -1 || BibTeXKeys[i].search(textRegExp) != -1){ 
+				found = true;
+			} else {
+				if(searchAbstract && absRowsData[i]!=undefined) {
+					if (absRowsData[i].search(textRegExp) != -1){ found=true; } 
+				}
+				if(searchReview && revRowsData[i]!=undefined) {
+					if (revRowsData[i].search(textRegExp) != -1){ found=true; } 
+				}
+			}
+			
+			if (found){
+				cRow.className = 'entry show';
+				hits++;
+			} else {
+				cRow.className = 'entry noshow';
+			}
+		}
+	}
+
+	// update statistics
+	setStatistics(hits)
+	
+	// set previous search value
+	prevSearch = tInput.value;
+}
+
+
+// Strip Diacritics from text
+// http://stackoverflow.com/questions/990904/javascript-remove-accents-in-strings
+
+// String containing replacement characters for stripping accents 
+var stripstring = 
+    'AAAAAAACEEEEIIII'+
+    'DNOOOOO.OUUUUY..'+
+    'aaaaaaaceeeeiiii'+
+    'dnooooo.ouuuuy.y'+
+    'AaAaAaCcCcCcCcDd'+
+    'DdEeEeEeEeEeGgGg'+
+    'GgGgHhHhIiIiIiIi'+
+    'IiIiJjKkkLlLlLlL'+
+    'lJlNnNnNnnNnOoOo'+
+    'OoOoRrRrRrSsSsSs'+
+    'SsTtTtTtUuUuUuUu'+
+    'UuUuWwYyYZzZzZz.';
+
+function stripDiacritics(str){
+
+    if(noSquiggles==false){
+        return str;
+    }
+
+    var answer='';
+    for(var i=0;i<str.length;i++){
+        var ch=str[i];
+        var chindex=ch.charCodeAt(0)-192;   // Index of character code in the strip string
+        if(chindex>=0 && chindex<stripstring.length){
+            // Character is within our table, so we can strip the accent...
+            var outch=stripstring.charAt(chindex);
+            // ...unless it was shown as a '.'
+            if(outch!='.')ch=outch;
+        }
+        answer+=ch;
+    }
+    return answer;
+}
+
+// http://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
+// NOTE: must escape every \ in the export code because of the JabRef Export...
+function escapeRegExp(str) {
+  return str.replace(/[-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+}
+
+function toggleInfo(articleid,info) {
+
+	var entry = document.getElementById(articleid);
+	var abs = document.getElementById('abs_'+articleid);
+	var rev = document.getElementById('rev_'+articleid);
+	var bib = document.getElementById('bib_'+articleid);
+	
+	if (abs && info == 'abstract') {
+		abs.className.indexOf('noshow') == -1?abs.className = 'abstract noshow':abs.className = 'abstract show';
+	} else if (rev && info == 'review') {
+		rev.className.indexOf('noshow') == -1?rev.className = 'review noshow':rev.className = 'review show';
+	} else if (bib && info == 'bibtex') {
+		bib.className.indexOf('noshow') == -1?bib.className = 'bibtex noshow':bib.className = 'bibtex show';
+	} else { 
+		return;
+	}
+
+	// check if one or the other is available
+	var revshow; var absshow; var bibshow;
+	(abs && abs.className.indexOf('noshow') == -1)? absshow = true: absshow = false;
+	(rev && rev.className.indexOf('noshow') == -1)? revshow = true: revshow = false;	
+	(bib && bib.className.indexOf('noshow') == -1)? bibshow = true: bibshow = false;
+	
+	// highlight original entry
+	if(entry) {
+		if (revshow || absshow || bibshow) {
+		entry.className = 'entry highlight show';
+		} else {
+		entry.className = 'entry show';
+		}
+	}
+	
+	// When there's a combination of abstract/review/bibtex showing, need to add class for correct styling
+	if(absshow) {
+		(revshow||bibshow)?abs.className = 'abstract nextshow':abs.className = 'abstract';
+	} 
+	if (revshow) {
+		bibshow?rev.className = 'review nextshow': rev.className = 'review';
+	}	
+	
+}
+
+function setStatistics (hits) {
+	if(hits < 0) { hits=numEntries; }
+	if(stats) { stats.firstChild.data = hits + '/' + numEntries}
+}
+
+function getTextContent(node) {
+	// Function written by Arve Bersvendsen
+	// http://www.virtuelvis.com
+	
+	if (node.nodeType == 3) {
+	return node.nodeValue;
+	} // text node
+	if (node.nodeType == 1 && node.className != "infolinks") { // element node
+	var text = [];
+	for (var chld = node.firstChild;chld;chld=chld.nextSibling) {
+		text.push(getTextContent(chld));
+	}
+	return text.join("");
+	} return ""; // some other node, won't contain text nodes.
+}
+
+function showAll(){
+	closeAllInfo();
+	for (var i = 0; i < numEntries; i++){ entryRows[i].className = 'entry show'; }
+}
+
+function closeAllInfo(){
+	for (var i=0; i < numInfo; i++){
+		if (infoRows[i].className.indexOf('noshow') ==-1) {
+			infoRows[i].className = infoRows[i].className + ' noshow';
+		}
+	}
+}
+
+function clearQS() {
+	qsfield.value = '';
+	showAll();
+}
+
+function redoQS(){
+	showAll();
+	quickSearch(qsfield);
+}
+
+function updateSetting(obj){
+	var option = obj.id;
+	var checked = obj.value;
+
+	switch(option)
+	 {
+	 case "opt_searchAbs":
+	   searchAbstract=!searchAbstract;
+	   redoQS();
+	   break;
+	 case "opt_searchRev":
+	   searchReview=!searchReview;
+	   redoQS();
+	   break;
+	 case "opt_useRegExp":
+	   searchRegExp=!searchRegExp;
+	   redoQS();
+	   break;
+	 case "opt_noAccents":
+	   noSquiggles=!noSquiggles;
+	   loadTableData();
+	   redoQS();
+	   break;
+	 }
+}
+
+function initPreferences(){
+	if(searchAbstract){document.getElementById("opt_searchAbs").checked = true;}
+	if(searchReview){document.getElementById("opt_searchRev").checked = true;}
+	if(noSquiggles){document.getElementById("opt_noAccents").checked = true;}
+	if(searchRegExp){document.getElementById("opt_useRegExp").checked = true;}
+	
+	if(numAbs==0) {document.getElementById("opt_searchAbs").parentNode.style.display = 'none';}
+	if(numRev==0) {document.getElementById("opt_searchRev").parentNode.style.display = 'none';}
+}
+
+function toggleSettings(){
+	var togglebutton = document.getElementById('showsettings');
+	var settings = document.getElementById('settings');
+	
+	if(settings.className == "hidden"){
+		settings.className = "show";
+		togglebutton.innerText = "close settings";
+		togglebutton.textContent = "close settings";
+	}else{
+		settings.className = "hidden";
+		togglebutton.innerText = "settings...";		
+		togglebutton.textContent = "settings...";
+	}
+}
+
+-->
+</script>
+<style type="text/css">
+body { background-color: white; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.2; padding: 1em; color: #2E2E2E; margin: auto 2em; }
+
+form#quicksearch { width: auto; border-style: solid; border-color: gray; border-width: 1px 0px; padding: 0.7em 0.5em; display:none; position:relative; }
+span#searchstat {padding-left: 1em;}
+
+div#settings { margin-top:0.7em; /* border-bottom: 1px transparent solid; background-color: #efefef; border: 1px grey solid; */ }
+div#settings ul {margin: 0; padding: 0; }
+div#settings li {margin: 0; padding: 0 1em 0 0; display: inline; list-style: none; }
+div#settings li + li { border-left: 2px #efefef solid; padding-left: 0.5em;}
+div#settings input { margin-bottom: 0px;}
+
+div#settings.hidden {display:none;}
+
+#showsettings { border: 1px grey solid; padding: 0 0.5em; float:right; line-height: 1.6em; text-align: right; }
+#showsettings:hover { cursor: pointer; }
+
+.invalidsearch { background-color: red; }
+input[type="button"] { background-color: #efefef; border: 1px #2E2E2E solid;}
+
+table { width: 100%; empty-cells: show; border-spacing: 0em 0.2em; margin: 1em 0em; border-style: none; }
+th, td { border: 1px gray solid; border-width: 1px 1px; padding: 0.5em; vertical-align: top; text-align: left; }
+th { background-color: #efefef; }
+td + td, th + th { border-left: none; }
+
+td a { color: navy; text-decoration: none; }
+td a:hover  { text-decoration: underline; }
+
+tr.noshow { display: none;}
+tr.highlight td { background-color: #EFEFEF; border-top: 2px #2E2E2E solid; font-weight: bold; }
+tr.abstract td, tr.review td, tr.bibtex td { background-color: #EFEFEF; text-align: justify; border-bottom: 2px #2E2E2E solid; }
+tr.nextshow td { border-bottom: 1px gray solid; }
+
+tr.bibtex pre { width: 100%; overflow: auto; white-space: pre-wrap;}
+p.infolinks { margin: 0.3em 0em 0em 0em; padding: 0px; }
+
+@media print {
+	p.infolinks, #qs_settings, #quicksearch, t.bibtex { display: none !important; }
+	tr { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<form action="" id="quicksearch">
+<input type="text" id="qs_field" autocomplete="off" placeholder="Type to search..." /> <input type="button" onclick="clearQS()" value="clear" />
+<span id="searchstat">Matching entries: <span id="stat">0</span></span>
+<div id="showsettings" onclick="toggleSettings()">settings...</div>
+<div id="settings" class="hidden">
+<ul>
+<li><input type="checkbox" class="search_setting" id="opt_searchAbs" onchange="updateSetting(this)"><label for="opt_searchAbs"> include abstract</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_searchRev" onchange="updateSetting(this)"><label for="opt_searchRev"> include review</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_useRegExp" onchange="updateSetting(this)"><label for="opt_useRegExp"> use RegExp</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_noAccents" onchange="updateSetting(this)"><label for="opt_noAccents"> ignore accents</label></li>
+</ul>
+</div>
+</form>
+<table id="qs_table" border="1">
+<thead><tr><th width="20%">Author</th><th width="30%">Title</th><th width="5%">Year</th><th width="30%">Journal/Proceedings</th><th width="10%">Reftype</th><th width="5%">DOI/URL</th></tr></thead>
+<tbody><tr id="Wegner2021" class="entry">
+	<td>von Wegner, F., Bauer, S., Rosenow, F., Triesch, J. and Laufs, H.</td>
+	<td>EEG microstate periodicity explained by rotating phase patterns of resting-state alpha oscillations. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2021','bibtex')">BibTeX</a>]</p></td>
+	<td>2021</td>
+	<td>NeuroImage<br/>Vol. 224, pp. 117372&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2020.117372">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2021" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2021,
+  author = {von Wegner, F. and Bauer, S. and Rosenow, F. and Triesch, J. and Laufs, H.},
+  title = {EEG microstate periodicity explained by rotating phase patterns of resting-state alpha oscillations.},
+  journal = {NeuroImage},
+  year = {2021},
+  volume = {224},
+  pages = {117372},
+  doi = {http://doi.org/10.1016/j.neuroimage.2020.117372}
+}
+</pre></td>
+</tr>
+<tr id="Wieder2020" class="entry">
+	<td>Wieder, N., Fink, R. and von Wegner, F.</td>
+	<td>Simulation strategies for calcium microdomains and calcium noise. <p class="infolinks">[<a href="javascript:toggleInfo('Wieder2020','bibtex')">BibTeX</a>]</p></td>
+	<td>2020</td>
+	<td>Adv Exp Med Biol<br/>Vol. 1131, pp. 771-797&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/978-3-030-12457-1_31">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wieder2020" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wieder2020,
+  author = {Wieder, N. and Fink, R.H.A. and von Wegner, F.},
+  title = {Simulation strategies for calcium microdomains and calcium noise.},
+  journal = {Adv Exp Med Biol},
+  year = {2020},
+  volume = {1131},
+  pages = {771-797},
+  doi = {http://doi.org/10.1007/978-3-030-12457-1_31}
+}
+</pre></td>
+</tr>
+<tr id="Knaut2019" class="entry">
+	<td>Knaut, P., von Wegner, F., Morzelewski, A. and Laufs, H.</td>
+	<td>EEG-correlated fMRI of human alpha (de-)synchronization. <p class="infolinks">[<a href="javascript:toggleInfo('Knaut2019','bibtex')">BibTeX</a>]</p></td>
+	<td>2019</td>
+	<td>Clin Neurophysiol<br/>Vol. 130(8), pp. 1375-1386&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.clinph.2019.04.715">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Knaut2019" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Knaut2019,
+  author = {Knaut, P. and von Wegner, F. and Morzelewski, A. and Laufs, H.},
+  title = {EEG-correlated fMRI of human alpha (de-)synchronization.},
+  journal = {Clin Neurophysiol},
+  year = {2019},
+  volume = {130},
+  number = {8},
+  pages = {1375-1386},
+  doi = {http://doi.org/10.1016/j.clinph.2019.04.715}
+}
+</pre></td>
+</tr>
+<tr id="Gamboa2018" class="entry">
+	<td>Gamboa, O.L., Yuen, S.L.K., von Wegner, F., Behrens, M. and Steinmetz, H.</td>
+	<td>The challenge of forgetting: Neurobiological mechanisms of auditory directed forgetting. <p class="infolinks">[<a href="javascript:toggleInfo('Gamboa2018','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Human Brain Mapping<br/>Vol. 39(1), pp. 249-263&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1002/hbm.23840">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Gamboa2018" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Gamboa2018,
+  author = {Gamboa, O. L. and Yuen, S. L. K. and von Wegner, F. and Behrens, M. and Steinmetz, H.},
+  title = {The challenge of forgetting: Neurobiological mechanisms of auditory directed forgetting.},
+  journal = {Human Brain Mapping},
+  year = {2018},
+  volume = {39},
+  number = {1},
+  pages = {249--263},
+  doi = {http://doi.org/10.1002/hbm.23840}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2018" class="entry">
+	<td>von Wegner, F., Laufs, H. and Tagliazucchi, E.</td>
+	<td>Mutual information identifies spurious Hurst phenomena in resting state EEG and fMRI data. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2018','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Phys Rev E<br/>Vol. 97(2-1), pp. 022415&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1103/PhysRevE.97.022415">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2018" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2018,
+  author = {von Wegner, F. and Laufs, H. and Tagliazucchi, E.},
+  title = {Mutual information identifies spurious Hurst phenomena in resting state EEG and fMRI data.},
+  journal = {Phys Rev E},
+  year = {2018},
+  volume = {97},
+  number = {2-1},
+  pages = {022415},
+  doi = {http://doi.org/10.1103/PhysRevE.97.022415}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2018a" class="entry">
+	<td>von Wegner, F. and Laufs, H.</td>
+	<td>Information-Theoretical Analysis of EEG Microstate Sequences in Python. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2018a','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Front Neuroinform<br/>Vol. 12, pp. 30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fninf.2018.00030">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2018a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2018a,
+  author = {von Wegner, F. and Laufs, H.},
+  title = {Information-Theoretical Analysis of EEG Microstate Sequences in Python.},
+  journal = {Front Neuroinform},
+  year = {2018},
+  volume = {12},
+  pages = {30},
+  doi = {http://doi.org/10.3389/fninf.2018.00030}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2018b" class="entry">
+	<td>von Wegner, F., Knaut, P. and Laufs, H.</td>
+	<td>EEG microstate sequences from different clustering algorithms are information-theoretically invariant. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2018b','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Front Comp Neurosci<br/>Vol. 12, pp. 30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fncom.2018.00070">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2018b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2018b,
+  author = {von Wegner, F. and Knaut, P. and Laufs, H.},
+  title = {EEG microstate sequences from different clustering algorithms are information-theoretically invariant.},
+  journal = {Front Comp Neurosci},
+  year = {2018},
+  volume = {12},
+  pages = {30},
+  doi = {http://doi.org/10.3389/fncom.2018.00070}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2018c" class="entry">
+	<td>von Wegner, F.</td>
+	<td>Partial autoinformation to characterize symbolic sequences. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2018c','bibtex')">BibTeX</a>]</p></td>
+	<td>2018</td>
+	<td>Front Physiol<br/>Vol. 9, pp. 1382&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fphys.2018.01382">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2018c" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2018c,
+  author = {von Wegner, F.},
+  title = {Partial autoinformation to characterize symbolic sequences.},
+  journal = {Front Physiol},
+  year = {2018},
+  volume = {9},
+  pages = {1382},
+  doi = {http://doi.org/10.3389/fphys.2018.01382}
+}
+</pre></td>
+</tr>
+<tr id="Bauer2017" class="entry">
+	<td>Bauer, S., van Alphen, N., Becker, A., Chiocchetti, A., Deichmann, R., Deller, T., Freiman, T., Freitag, C.M., Gehrig, J., Hermsen, A.M., Jedlicka, P., Kell, C., Klein, K.M., Knake, S., Kullmann, D.M., Liebner, S., Norwood, B.A., Omigie, D., Plate, K., Reif, A., Reif, P.S., Reiss, Y., Roeper, J., Ronellenfitsch, M.W., Schorge, S., Schratt, G., Schwarzacher, S.W., Steinbach, J.P., Strzelczyk, A., Triesch, J., Wagner, M., Walker, M.C., von Wegner, F. and Rosenow, F.</td>
+	<td>Personalized translational epilepsy research - Novel approaches and future perspectives: Part II: Experimental and translational approaches. <p class="infolinks">[<a href="javascript:toggleInfo('Bauer2017','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>Epilepsy Behav<br/>Vol. 76, pp. 7-12&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.yebeh.2017.06.040">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Bauer2017" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Bauer2017,
+  author = {Bauer, S. and van Alphen, N. and Becker, A. and Chiocchetti, A. and Deichmann, R. and Deller, T. and Freiman, T. and Freitag, C. M. and Gehrig, J. and Hermsen, A. M. and Jedlicka, P. and Kell, C. and Klein, K. M. and Knake, S. and Kullmann, D. M. and Liebner, S. and Norwood, B. A. and Omigie, D. and Plate, K. and Reif, A. and Reif, P. S. and Reiss, Y. and Roeper, J. and Ronellenfitsch, M. W. and Schorge, S. and Schratt, G. and Schwarzacher, S. W. and Steinbach, J. P. and Strzelczyk, A. and Triesch, J. and Wagner, M. and Walker, M. C. and von Wegner, F. and Rosenow, F.},
+  title = {Personalized translational epilepsy research - Novel approaches and future perspectives: Part II: Experimental and translational approaches.},
+  journal = {Epilepsy Behav},
+  year = {2017},
+  volume = {76},
+  pages = {7--12},
+  doi = {http://doi.org/10.1016/j.yebeh.2017.06.040}
+}
+</pre></td>
+</tr>
+<tr id="Gamboa2017" class="entry">
+	<td>Gamboa, O.L., Garcia-Campayo, J., Müller, T. and von Wegner, F.</td>
+	<td>Suppress to Forget: The Effect of a Mindfulness-Based Strategy during an Emotional Item-Directed Forgetting Paradigm. <p class="infolinks">[<a href="javascript:toggleInfo('Gamboa2017','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>Front Psychol<br/>Vol. 8, pp. 432&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fpsyg.2017.00432">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Gamboa2017" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Gamboa2017,
+  author = {Gamboa, O. L. and Garcia-Campayo, J. and Müller, T. and von Wegner, F.},
+  title = {Suppress to Forget: The Effect of a Mindfulness-Based Strategy during an Emotional Item-Directed Forgetting Paradigm.},
+  journal = {Front Psychol},
+  year = {2017},
+  volume = {8},
+  pages = {432},
+  doi = {http://doi.org/10.3389/fpsyg.2017.00432}
+}
+</pre></td>
+</tr>
+<tr id="Rosenow2017" class="entry">
+	<td>Rosenow, F., van Alphen, N., Becker, A., Chiocchetti, A., Deichmann, R., Deller, T., Freiman, T., Freitag, C.M., Gehrig, J., Hermsen, A.M., Jedlicka, P., Kell, C., Klein, K.M., Knake, S., Kullmann, D.M., Liebner, S., Norwood, B.A., Omigie, D., Plate, K., Reif, A., Reif, P.S., Reiss, Y., Roeper, J., Ronellenfitsch, M.W., Schorge, S., Schratt, G., Schwarzacher, S.W., Steinbach, J.P., Strzelczyk, A., Triesch, J., Wagner, M., Walker, M.C., von Wegner, F. and Bauer, S.</td>
+	<td>Personalized translational epilepsy research - Novel approaches and future perspectives: Part I: Clinical and network analysis approaches. <p class="infolinks">[<a href="javascript:toggleInfo('Rosenow2017','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>Epilepsy Behav<br/>Vol. 76, pp. 13-18&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.yebeh.2017.06.041">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Rosenow2017" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Rosenow2017,
+  author = {Rosenow, F. and van Alphen, N. and Becker, A. and Chiocchetti, A. and Deichmann, R. and Deller, T. and Freiman, T. and Freitag, C. M. and Gehrig, J. and Hermsen, A. M. and Jedlicka, P. and Kell, C. and Klein, K. M. and Knake, S. and Kullmann, D. M. and Liebner, S. and Norwood, B. A. and Omigie, D. and Plate, K. and Reif, A. and Reif, P. S. and Reiss, Y. and Roeper, J. and Ronellenfitsch, M. W. and Schorge, S. and Schratt, G. and Schwarzacher, S. W. and Steinbach, J. P. and Strzelczyk, A. and Triesch, J. and Wagner, M. and Walker, M. C. and von Wegner, F. and Bauer, S.},
+  title = {Personalized translational epilepsy research - Novel approaches and future perspectives: Part I: Clinical and network analysis approaches.},
+  journal = {Epilepsy Behav},
+  year = {2017},
+  volume = {76},
+  pages = {13--18},
+  doi = {http://doi.org/10.1016/j.yebeh.2017.06.041}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2017" class="entry">
+	<td>von Wegner, F., Tagliazucchi, E. and Laufs, H.</td>
+	<td>Information-theoretical analysis of resting state EEG microstate sequences - non-Markovianity, non-stationarity and periodicities. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2017','bibtex')">BibTeX</a>]</p></td>
+	<td>2017</td>
+	<td>NeuroImage<br/>Vol. 158, pp. 99-111&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2017.06.062">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2017" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2017,
+  author = {von Wegner, F. and Tagliazucchi, E. and Laufs, H.},
+  title = {Information-theoretical analysis of resting state EEG microstate sequences - non-Markovianity, non-stationarity and periodicities.},
+  journal = {NeuroImage},
+  year = {2017},
+  volume = {158},
+  pages = {99--111},
+  doi = {http://doi.org/10.1016/j.neuroimage.2017.06.062}
+}
+</pre></td>
+</tr>
+<tr id="Arnold2016" class="entry">
+	<td>Arnold, C., Gispert, S., Bonig, H., von Wegner, F., Somasundaram, S. and Kell, C.A.</td>
+	<td>Dopaminergic Modulation of Cognitive Preparation for Overt Reading: Evidence from the Study of Genetic Polymorphisms. <p class="infolinks">[<a href="javascript:toggleInfo('Arnold2016','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Arnold2016','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>Cereb Cortex<br/>Vol. 26(4), pp. 1539-1557<i>School</i>: Cognitive Neuroscience Group, Brain Imaging Center Department of Neurology.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1093/cercor/bhu330">DOI</a> <a href="http://dx.doi.org/10.1093/cercor/bhu330">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Arnold2016" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Choosing and implementing the rules for contextually adequate behavior depends on frontostriatal interactions. Observations in Parkinson's disease and pharmacological manipulations of dopamine transmission suggest that these corticobasal loops are modulated by dopamine. To determine, therefore, the physiological contributions of dopamine to task-rule-related processing, we performed a cue-target fMRI reading paradigm in 71 healthy participants and investigated the effects of COMT Val158Met, DAT1 VNTR 9/10, and DRD2/ANKK1 polymorphisms. The DRD2/ANKK1 polymorphism did not affect results. Intermediate prefrontal dopamine concentrations in COMT Val158Met heterozygotes facilitated preparatory interactions between the mesial prefrontal cortex and the left striatum during preparation for overt reading. To our knowledge, this is the first report of an inverted U-shaped curve modulation of cognition-related brain activity by prefrontal dopamine levels. In contrast, a linear effect of COMT Val158Met and DAT1 VNTR 9/10 polymorphisms on preparatory activity in the left inferior frontal gyrus pointed to a negative interaction between tonic lateral prefrontal and phasic subcortical dopamine. The COMT Val158Met polymorphism affected also feedforward and feedback processing in the sensorimotor speech system. Our results suggest that dopamine modulates corticobasal interactions on both the cortical and subcortical level but differently depending on the specific cognitive subprocesses involved.</td>
+</tr>
+<tr id="bib_Arnold2016" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Arnold2016,
+  author = {Arnold, Christiane and Gispert, Suzana and Bonig, Halvard and von Wegner, Frederic and Somasundaram, Sriramya and Kell, Christian A.},
+  title = {Dopaminergic Modulation of Cognitive Preparation for Overt Reading: Evidence from the Study of Genetic Polymorphisms.},
+  journal = {Cereb Cortex},
+  school = {Cognitive Neuroscience Group, Brain Imaging Center Department of Neurology.},
+  year = {2016},
+  volume = {26},
+  number = {4},
+  pages = {1539--1557},
+  url = {http://dx.doi.org/10.1093/cercor/bhu330},
+  doi = {http://doi.org/10.1093/cercor/bhu330}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2016" class="entry">
+	<td>von Wegner, F., Tagliazucchi, E., Brodbeck, V. and Laufs, H.</td>
+	<td>Analytical and empirical fluctuation functions of the EEG microstate random walk - Short-range vs. long-range correlations. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2016','bibtex')">BibTeX</a>]</p></td>
+	<td>2016</td>
+	<td>NeuroImage<br/>Vol. 141, pp. 442-451&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2016.07.050">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2016" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2016,
+  author = {von Wegner, F. and Tagliazucchi, E. and Brodbeck, V. and Laufs, H.},
+  title = {Analytical and empirical fluctuation functions of the EEG microstate random walk - Short-range vs. long-range correlations.},
+  journal = {NeuroImage},
+  year = {2016},
+  volume = {141},
+  pages = {442--451},
+  doi = {http://doi.org/10.1016/j.neuroimage.2016.07.050}
+}
+</pre></td>
+</tr>
+<tr id="Bolesch2015" class="entry">
+	<td>Bolesch, S., von Wegner, F., Senft, C. and Lorenz, M.W.</td>
+	<td>Transcranial Ultrasound to Detect Elevated Intracranial Pressure: Comparison of Septum Pellucidum Undulations and Optic Nerve Sheath Diameter. <p class="infolinks">[<a href="javascript:toggleInfo('Bolesch2015','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Bolesch2015','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>Ultrasound Med Biol<br/>Vol. 41(5), pp. 1233-1240<i>School</i>: Department of Neurology, University Hospital Frankfurt, Frankfurt am Main, Germany. Electronic address: matthias.lorenz@em.uni-frankfurt.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.ultrasmedbio.2014.12.023">DOI</a> <a href="http://dx.doi.org/10.1016/j.ultrasmedbio.2014.12.023">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Bolesch2015" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Two ultrasound tests that can be used to assess increased intracranial pressure (ICP) at the bedside are described. In outpatients receiving lumbar puncture and in intensive care patients with invasive ICP monitoring, we measured the optic nerve sheath diameter (ONSD) with transbulbar B-mode sonography and septum pellucidum undulation (SPU) induced by repeated passive head rotation with transtemporal M-mode sonography. We assessed the sensitivity and specificity of ONSD and SPU in the prediction of ICP >20 cm H2O. For ONSD, sensitivity was 53&percnt; and specificity 100&percnt; (n = 35, p < 0.001). The sensitivity of the SPU test was 75&percnt; and the specificity 100&percnt; (n = 32, p < 0.001). Although the SPU test may not feasible in some patients, it has high sensitivity and specificity comparable to those of ONSD measurement. The SPU test and ONSD may be useful alternatives to fundoscopy in clinical routine, preferably in combination.</td>
+</tr>
+<tr id="bib_Bolesch2015" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Bolesch2015,
+  author = {Bolesch, Susanne and von Wegner, Frederic and Senft, Christian and Lorenz, Matthias W.},
+  title = {Transcranial Ultrasound to Detect Elevated Intracranial Pressure: Comparison of Septum Pellucidum Undulations and Optic Nerve Sheath Diameter.},
+  journal = {Ultrasound Med Biol},
+  school = {Department of Neurology, University Hospital Frankfurt, Frankfurt am Main, Germany. Electronic address: matthias.lorenz@em.uni-frankfurt.de.},
+  year = {2015},
+  volume = {41},
+  number = {5},
+  pages = {1233--1240},
+  url = {http://dx.doi.org/10.1016/j.ultrasmedbio.2014.12.023},
+  doi = {http://doi.org/10.1016/j.ultrasmedbio.2014.12.023}
+}
+</pre></td>
+</tr>
+<tr id="Kuhn2015" class="entry">
+	<td>Kuhn, A., Brodbeck, V., Tagliazucchi, E., Morzelewski, A., von Wegner F. and Laufs, H.</td>
+	<td>Narcoleptic Patients Show Fragmented EEG-Microstructure During Early NREM Sleep. <p class="infolinks">[<a href="javascript:toggleInfo('Kuhn2015','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Kuhn2015','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>Brain Topogr<br/>Vol. 28(4), pp. 619-635<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University, Frankfurt am Main, Germany, alena@kuhnnetz.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s10548-014-0387-1">DOI</a> <a href="http://dx.doi.org/10.1007/s10548-014-0387-1">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Kuhn2015" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Narcolepsy is a chronic disorder of the sleep-wake cycle with pathological shifts between sleep stages. These abrupt shifts are induced by a sleep-regulating flip-flop mechanism which is destabilized in narcolepsy without obvious alterations in EEG oscillations. Here, we focus on the question whether the pathology of narcolepsy is reflected in EEG microstate patterns. 30 channel awake and NREM sleep EEGs of 12 narcoleptic patients and 32 healthy subjects were analyzed. Fitting back the dominant amplitude topography maps into the EEG led to a temporal sequence of maps. Mean microstate duration, ratio total time (RTT), global explained variance (GEV) and transition probability of each map were compared between both groups. Nine patients reached N1, 5 N2 and only 4 N3. All healthy subjects reached at least N2, 19 also N3. Four dominant maps could be found during wakefulness and all NREM- sleep stages in healthy subjects. During N3, narcolepsy patients showed an additional fifth map. The mean microstate duration was significantly shorter in narcoleptic patients than controls, most prominent in deep sleep. Single maps' GEV and RTT were also altered in narcolepsy. Being aware of the limitation of our low sample size, narcolepsy patients showed wake-like features during sleep as reflected in shorter microstate durations. These microstructural EEG alterations might reflect the intrusion of brain states characteristic of wakefulness into sleep and an instability of the sleep-regulating flip-flop mechanism resulting not only in pathological switches between REM- and NREM-sleep but also within NREM sleep itself, which may lead to a microstructural fragmentation of the EEG.</td>
+</tr>
+<tr id="bib_Kuhn2015" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Kuhn2015,
+  author = {Kuhn, Alena and Brodbeck, Verena and Tagliazucchi, Enzo and Morzelewski, Astrid and von Wegner, F., and Laufs, Helmut},
+  title = {Narcoleptic Patients Show Fragmented EEG-Microstructure During Early NREM Sleep.},
+  journal = {Brain Topogr},
+  school = {Department of Neurology and Brain Imaging Center, Goethe University, Frankfurt am Main, Germany, alena@kuhnnetz.de.},
+  year = {2015},
+  volume = {28},
+  number = {4},
+  pages = {619--635},
+  url = {http://dx.doi.org/10.1007/s10548-014-0387-1},
+  doi = {http://doi.org/10.1007/s10548-014-0387-1}
+}
+</pre></td>
+</tr>
+<tr id="Wieder2015" class="entry">
+	<td>Wieder, N., Fink, R.H.A. and von Wegner, F.</td>
+	<td>Exact stochastic simulation of a calcium microdomain reveals the impact of Ca^2+ fluctuations on IP3R gating. <p class="infolinks">[<a href="javascript:toggleInfo('Wieder2015','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wieder2015','bibtex')">BibTeX</a>]</p></td>
+	<td>2015</td>
+	<td>Biophys J<br/>Vol. 108(3), pp. 557-567&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.bpj.2014.11.3458">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Wieder2015" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In this study, we numerically analyzed the nonlinear Ca2þ-dependent gating dynamics of a single, nonconducting<br>inositol 1,4,5-trisphosphate receptor (IP3R) channel, using an exact and fully stochastic simulation algorithm that includes channel<br>gating, Ca2þ buffering, and Ca2þ diffusion. The IP3R is a ubiquitous intracellular Ca2þ release channel that plays an important role<br>in the formation of complex spatiotemporal Ca2þ signals such as waves and oscillations. Dynamic subfemtoliter Ca2þ micro-<br>domains reveal low copy numbers of Ca2þ ions, buffer molecules, and IP3Rs, and stochastic fluctuations arising from molecular<br>interactions and diffusion do not average out. In contrast to models treating calcium dynamics deterministically, the stochastic<br>approach accounts for this molecular noise. We varied Ca2þ diffusion coefficients and buffer reaction rates to tune the autocor-<br>relation properties of Ca2þ noise and found a distinct relation between the autocorrelation time tac, the mean channel open and<br>close times, and the resulting IP3R open probability PO. We observed an increased PO for shorter noise autocorrelation times,<br>caused by increasing channel open times and decreasing close times. In a pure diffusion model the effects become apparent<br>at elevated calcium concentrations, e.g., at [Ca2þ] 1⁄4 25 mM, tac 1⁄4 0.082 ms, the IP3R open probability increased by z20%<br>and mean open times increased by z4 ms, compared to a zero noise model. We identified the inactivating Ca2þ binding site of<br>IP3R subunits as the primarily noise-susceptible element of the De Young and Keizer model. Short Ca2þ noise autocorrelation<br>times decrease the probability of Ca2þ association and consequently increase IP3R activity. These results suggest a functional<br>role of local calcium noise properties on calcium-regulated target molecules such as the ubiquitous IP3R. This finding may<br>stimulate novel experimental approaches analyzing the role of calcium noise properties on microdomain behavior.</td>
+</tr>
+<tr id="bib_Wieder2015" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wieder2015,
+  author = {Nicolas Wieder and Rainer H. A. Fink and von Wegner, F.},
+  title = {Exact stochastic simulation of a calcium microdomain reveals the impact of Ca^2+ fluctuations on IP3R gating.},
+  journal = {Biophys J},
+  year = {2015},
+  volume = {108},
+  number = {3},
+  pages = {557--567},
+  doi = {http://doi.org/10.1016/j.bpj.2014.11.3458}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2014" class="entry">
+	<td>Friedrich, O., Yi, B., Edwards, J.N., Reischl, B., Wirth-H&uuml;cking, A., Buttgereit, A., Lang, R., Weber, C., Polyak, F., Liu, I., von Wegner Frederic, Cully, T.R., Lee, A., Most, P. and V&ouml;lkers, M.</td>
+	<td>Interleukin-1&alpha; Reversibly Inhibits Skeletal Muscle Ryanodine Receptor: A Novel Mechanism for Critical Illness Myopathy? <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2014','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2014','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Am J Respir Cell Mol Biol<br/>Vol. 50(6), pp. 1096-1106<i>School</i>: FAU Erlangen-Nuremberg, Institute of Medical Biotechnology, Erlangen, Germany ; oliver.friedrich@mbt.uni-erlangen.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1165/rcmb.2013-0059OC">DOI</a> <a href="http://dx.doi.org/10.1165/rcmb.2013-0059OC">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2014" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Critical illness myopathies in patients with sepsis or sustained mechanical ventilation prolong intensive care treatment and threaten both patients and health budgets. No specific therapy is available. Underlying pathophysiological mechanisms are still patchy. We characterized interleukin-1α (IL-1α) action on muscle performance in 'skinned' muscle fibres using force transducers and confocal Ca2+ fluorescence microscopy for force/Ca2+ transients and Ca2+ sparks. Association of IL-1α with sarcoplasmic reticulum (SR) release channel RyR1 was investigated with co-immunoprecipitation and confocal immunofluorescence colocalization. Membrane integrity was studied in single intact fibres challenged with IL-1α. IL-1α reversibly stabilized Mg2+-inhibition of Ca2+ release. 'Low Mg2+'-induced force and Ca2+ transients were reversibly abolished by IL-1α. At normal Mg2+, IL-1α reversibly increased caffeine-induced force- and Ca2+-transients. IL-1α reduced SR Ca2+ leak via RyR1, as judged by (i) increased SR Ca2+ retention, (ii) increased IL-1α force transients being reproduced by 25 µM tetracaine and (iii) reduced Ca2+ spark frequencies by IL-1α or tetracaine. Co-immunoprecipitation confirmed RyR1/IL-1 association. Immunofluorescence RyR1/IL-1 patterns perfectly colocalized. Long-term 8 h IL-1α challenge of intact muscle fibres compromised membrane integrity in &nbsp;50 &percnt; of fibres and confirmed intracellular IL-1α deposition. IL-1α exerts a novel specific and reversible interaction mechanism with the skeletal muscle RyR1 macromolecular release complex without the need to act via its membrane IL-1 receptor since IL-1R membrane expression levels were not detectable in Western blots and immunostaining of single fibres. We present a potential explanation of how the inflammatory mediator IL-1α may contribute to muscle weakness in critical illness.</td>
+</tr>
+<tr id="bib_Friedrich2014" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2014,
+  author = {Friedrich, Oliver and Yi, Bing and Edwards, Joshua N. and Reischl, Barbara and Wirth-H&uuml;cking, Anette and Buttgereit, Andreas and Lang, Roland and Weber, Cornelia and Polyak, Fabian and Liu, Ilon and von Wegner, Frederic, and Cully, Tanya R. and Lee, Aven and Most, Patrick and V&ouml;lkers, Mirko},
+  title = {Interleukin-1&alpha; Reversibly Inhibits Skeletal Muscle Ryanodine Receptor: A Novel Mechanism for Critical Illness Myopathy?},
+  journal = {Am J Respir Cell Mol Biol},
+  school = {FAU Erlangen-Nuremberg, Institute of Medical Biotechnology, Erlangen, Germany ; oliver.friedrich@mbt.uni-erlangen.de.},
+  year = {2014},
+  volume = {50},
+  number = {6},
+  pages = {1096--1106},
+  url = {http://dx.doi.org/10.1165/rcmb.2013-0059OC},
+  doi = {http://doi.org/10.1165/rcmb.2013-0059OC}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2014b" class="entry">
+	<td>von Wegner, F., Wieder, N. and Fink, R.H.A.</td>
+	<td>Microdomain calcium fluctuations as a colored noise process. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2014b','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2014b','bibtex')">BibTeX</a>]</p></td>
+	<td>2014</td>
+	<td>Front Genet<br/>Vol. 5, pp. 376&nbsp;</td>
+	<td>article</td>
+	<td><a href="doi: 10.3389/fgene.2014.00376">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Wegner2014b" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Calcium ions play a key role in subcellular signaling as localized transients of the intracellular calcium concentration modify the activity of ion channels, enzymes and transcription factors, among others. The intracellular calcium concentration is inherently noisy, as diffusion, the transient binding to and dissociation from buffer molecules and stochastically gating calcium channels contribute to the fluctuations of the local copy number of Ca ions. We study the properties of the fluctuating calcium concentration using an exact stochastic simulation algorithm in sub-femtoliter volumes. It is shown that the time course of the local calcium concentration represents a colored-noise process whose autocorrelation time is a function of buffer kinetics and diffusion constants. Using the chemical Langevin description and the excess buffer approximation of the process, fast approximative algorithms and theoretical connections to the Ornstein-Uhlenbeck process are obtained. In a generic example, we show how calcium noise can couple to the dynamics of a particle in a double-well potential, leading to a colored noise induced transition. Our work shows how a multitude of intracellular signaling pathways may be influenced by the inherent stochasticity of calcium signals, a key messenger in virtually any cell type, and how the calcium signal can be implemented efficiently in cellular signaling models.</td>
+</tr>
+<tr id="bib_Wegner2014b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2014b,
+  author = {von Wegner, F. and Nicolas Wieder and Rainer H. A. Fink},
+  title = {Microdomain calcium fluctuations as a colored noise process.},
+  journal = {Front Genet},
+  year = {2014},
+  volume = {5},
+  pages = {376},
+  doi = {doi: 10.3389/fgene.2014.00376}
+}
+</pre></td>
+</tr>
+<tr id="Gamboa2013" class="entry">
+	<td>Gamboa, O.L., Tagliazucchi, E., von Wegner F., Jurcoane, A., Wahl, M., Laufs, H. and Ziemann, U.</td>
+	<td>Working memory performance of early MS patients correlates inversely with modularity increases in resting state functional connectivity networks. <p class="infolinks">[<a href="javascript:toggleInfo('Gamboa2013','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Gamboa2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>NeuroImage<br/>Vol. 94, pp. 385-395<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany; Department of Neurology and Stroke, Hertie Institute for Clinical Brain Research, Eberhard-Karls-University, Hoppe-Seyler-Str. 3, 72076 Tübingen, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2013.12.008">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2013.12.008">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Gamboa2013" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Multiple sclerosis (MS) is an autoimmune inflammatory demyelinating and neurodegenerative disorder of the central nervous system characterized by multifocal white matter brain lesions leading to alterations in connectivity at the subcortical and cortical level. Graph theory, in combination with neuroimaging techniques, has been recently developed into a powerful tool to assess the large-scale structure of brain functional connectivity. Considering the structural damage present in the brain of MS patients, we hypothesized that the topological properties of resting-state functional networks of early MS patients would be re-arranged in order to limit the impact of disease expression. A standardized dual task (Paced Auditory Serial Addition Task simultaneously performed with a paper and pencil task) was administered to study the interactions between behavioral performance and functional network re-organization. We studied a group of 16 early MS patients (35.3±8.3years, 11 females) and 20 healthy controls (29.9±7.0years, 10 females) and found that brain resting-state networks of the MS patients displayed increased network modularity, i.e. diminished functional integration between separate functional modules. Modularity correlated negatively with dual task performance in the MS patients. Our results shed light on how localized anatomical connectivity damage can globally impact brain functional connectivity and how these alterations can impair behavioral performance. Finally, given the early stage of the MS patients included in this study, network modularity could be considered a promising biomarker for detection of earliest-stage brain network reorganization, and possibly of disease progression.</td>
+</tr>
+<tr id="bib_Gamboa2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Gamboa2013,
+  author = {Gamboa, O. L. and Tagliazucchi, E. and von Wegner, F., and Jurcoane, A. and Wahl, M. and Laufs, H. and Ziemann, U.},
+  title = {Working memory performance of early MS patients correlates inversely with modularity increases in resting state functional connectivity networks.},
+  journal = {NeuroImage},
+  school = {Department of Neurology and Brain Imaging Center, Goethe University, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany; Department of Neurology and Stroke, Hertie Institute for Clinical Brain Research, Eberhard-Karls-University, Hoppe-Seyler-Str. 3, 72076 Tübingen, Germany.},
+  year = {2013},
+  volume = {94},
+  pages = {385--395},
+  url = {http://dx.doi.org/10.1016/j.neuroimage.2013.12.008},
+  doi = {http://doi.org/10.1016/j.neuroimage.2013.12.008}
+}
+</pre></td>
+</tr>
+<tr id="Tagliazucchi2013" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Brodbeck, V., Jahnke, K. and Laufs, H.</td>
+	<td>Breakdown of long-range temporal dependence in default mode and attention networks during deep sleep. <p class="infolinks">[<a href="javascript:toggleInfo('Tagliazucchi2013','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Tagliazucchi2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>Proc Natl Acad Sci U S A<br/>Vol. 110(38), pp. 15419-15424<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University, 60528 Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1073/pnas.1312848110">DOI</a> <a href="http://dx.doi.org/10.1073/pnas.1312848110">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Tagliazucchi2013" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The integration of segregated brain functional modules is a prerequisite for conscious awareness during wakeful rest. Here, we test the hypothesis that temporal integration, measured as long-term memory in the history of neural activity, is another important quality underlying conscious awareness. For this aim, we study the temporal memory of blood oxygen level-dependent signals across the human nonrapid eye movement sleep cycle. Results reveal that this property gradually decreases from wakefulness to deep nonrapid eye movement sleep and that such decreases affect areas identified with default mode and attention networks. Although blood oxygen level-dependent spontaneous fluctuations exhibit nontrivial spatial organization, even during deep sleep, they also display a decreased temporal complexity in specific brain regions. Conversely, this result suggests that long-range temporal dependence might be an attribute of the spontaneous conscious mentation performed during wakeful rest.</td>
+</tr>
+<tr id="bib_Tagliazucchi2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Tagliazucchi2013,
+  author = {Tagliazucchi, Enzo and von Wegner, F. and Morzelewski, Astrid and Brodbeck, Verena and Jahnke, Kolja and Laufs, Helmut},
+  title = {Breakdown of long-range temporal dependence in default mode and attention networks during deep sleep.},
+  journal = {Proc Natl Acad Sci U S A},
+  school = {Department of Neurology and Brain Imaging Center, Goethe University, 60528 Frankfurt am Main, Germany.},
+  year = {2013},
+  volume = {110},
+  number = {38},
+  pages = {15419--15424},
+  url = {http://dx.doi.org/10.1073/pnas.1312848110},
+  doi = {http://doi.org/10.1073/pnas.1312848110}
+}
+</pre></td>
+</tr>
+<tr id="Tagliazucchi2013a" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Brodbeck, V., Borisov, S., Jahnke, K. and Laufs, H.</td>
+	<td>Large-scale brain functional modularity is reflected in slow electroencephalographic rhythms across the human non-rapid eye movement sleep cycle. <p class="infolinks">[<a href="javascript:toggleInfo('Tagliazucchi2013a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Tagliazucchi2013a','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>NeuroImage<br/>Vol. 70, pp. 327-339<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany. tagliazucchi.enzo@googlemail.com&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2012.12.073">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2012.12.073">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Tagliazucchi2013a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Large-scale brain functional networks (measured with functional magnetic resonance imaging, fMRI) are organized into separated but interacting modules, an architecture supporting the integration of distinct dynamical processes. In this work we study how the aforementioned modular architecture changes with the progressive loss of vigilance occurring in the descent to deep sleep and we examine the relationship between the ensuing slow electroencephalographic rhythms and large-scale network modularity as measured with fMRI. Graph theoretical methods are used to analyze functional connectivity graphs obtained from fifty-five participants at wakefulness, light and deep sleep. Network modularity (a measure of functional segregation) was found to increase during deeper sleep stages but not in light sleep. By endowing functional networks with dynamical properties, we found a direct link between increased electroencephalographic (EEG) delta power (1-4 Hz) and a breakdown of inter-modular connectivity. Both EEG slowing and increased network modularity were found to quickly decrease during awakenings from deep sleep to wakefulness, in a highly coordinated fashion. Studying the modular structure itself by means of a permutation test, we revealed different module memberships when deep sleep was compared to wakefulness. Analysis of node roles in the modular structure revealed an increase in the number of locally well-connected nodes and a decrease in the number of globally well-connected hubs, which hinders interactions between separated functional modules. Our results reveal a well-defined sequence of changes in brain modular organization occurring during the descent to sleep and establish a close parallel between modularity alterations in large-scale functional networks (accessible through whole brain fMRI recordings) and the slowing of scalp oscillations (visible on EEG). The observed re-arrangement of connectivity might play an important role in the processes underlying loss of vigilance and sensory awareness during deep sleep.</td>
+</tr>
+<tr id="bib_Tagliazucchi2013a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Tagliazucchi2013a,
+  author = {Tagliazucchi, Enzo and von Wegner, F. and Morzelewski, Astrid and Brodbeck, Verena and Borisov, Sergey and Jahnke, Kolja and Laufs, Helmut},
+  title = {Large-scale brain functional modularity is reflected in slow electroencephalographic rhythms across the human non-rapid eye movement sleep cycle.},
+  journal = {NeuroImage},
+  school = {Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany. tagliazucchi.enzo@googlemail.com},
+  year = {2013},
+  volume = {70},
+  pages = {327--339},
+  url = {http://dx.doi.org/10.1016/j.neuroimage.2012.12.073},
+  doi = {http://doi.org/10.1016/j.neuroimage.2012.12.073}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2013" class="entry">
+	<td>von Wegner, F. and Laufs, H.</td>
+	<td>Neuroimaging of wakefulness <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2013','bibtex')">BibTeX</a>]</p></td>
+	<td>2013</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td><a href="http://doi.org/10.1017/CBO9781139088268.013">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2013" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@book{Wegner2013,
+  author = {von Wegner, F. and Helmut Laufs},
+  title = {Neuroimaging of wakefulness},
+  publisher = {Cambridge University Press},
+  year = {2013},
+  doi = {http://doi.org/10.1017/CBO9781139088268.013}
+}
+</pre></td>
+</tr>
+<tr id="Brodbeck2012" class="entry">
+	<td>Brodbeck, V., Kuhn, A., von Wegner, F., Morzelewski, A., Tagliazucchi, E., Borisov, S., Michel, C.M. and Laufs, H.</td>
+	<td>EEG microstates of wakefulness and NREM sleep. <p class="infolinks">[<a href="javascript:toggleInfo('Brodbeck2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Brodbeck2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>NeuroImage<br/>Vol. 62(3), pp. 2129-2139<i>School</i>: Brain Imaging Center, Department of Neurology, University of Frankfurt, a.M., Germany. verena.brodbeck@kgu.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2012.05.060">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2012.05.060">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Brodbeck2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: EEG-microstates exploit spatio-temporal EEG features to characterize the spontaneous EEG as a sequence of a finite number of quasi-stable scalp potential field maps. So far, EEG-microstates have been studied mainly in wakeful rest and are thought to correspond to functionally relevant brain-states. Four typical microstate maps have been identified and labeled arbitrarily with the letters A, B, C and D. We addressed the question whether EEG-microstate features are altered in different stages of NREM sleep compared to wakefulness. 32-channel EEG of 32 subjects in relaxed wakefulness and NREM sleep was analyzed using a clustering algorithm, identifying the most dominant amplitude topography maps typical of each vigilance state. Fitting back these maps into the sleep-scored EEG resulted in a temporal sequence of maps for each sleep stage. All 32 subjects reached sleep stage N2, 19 also N3, for at least 1 min and 45 s. As in wakeful rest we found four microstate maps to be optimal in all NREM sleep stages. The wake maps were highly similar to those described in the literature for wakefulness. The sleep stage specific map topographies of N1 and N3 sleep showed a variable but overall relatively high degree of spatial correlation to the wake maps (Mean: N1 92 N3 87. The N2 maps were the least similar to wake (mean: 83. Mean duration, total time covered, global explained variance and transition probabilities per subject, map and sleep stage were very similar in wake and N1. In wake, N1 and N3, microstate map C was most dominant w.r.t. global explained variance and temporal presence (ratio total time), whereas in N2 microstate map B was most prominent. In N3, the mean duration of all microstate maps increased significantly, expressed also as an increase in transition probabilities of all maps to themselves in N3. This duration increase was partly--but not entirely--explained by the occurrence of slow waves in the EEG. The persistence of exactly four main microstate classes in all NREM sleep stages might speak in favor of an in principle maintained large scale spatial brain organization from wakeful rest to NREM sleep. In N1 and N3 sleep, despite spectral EEG differences, the microstate maps and characteristics were surprisingly close to wakefulness. This supports the notion that EEG microstates might reflect a large scale resting state network architecture similar to preserved fMRI resting state connectivity. We speculate that the incisive functional alterations which can be observed during the transition to deep sleep might be driven by changes in the level and timing of activity within this architecture.</td>
+</tr>
+<tr id="bib_Brodbeck2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Brodbeck2012,
+  author = {Brodbeck, Verena and Kuhn, Alena and von Wegner, F. and Morzelewski, Astrid and Tagliazucchi, Enzo and Borisov, Sergey and Michel, Christoph M. and Laufs, Helmut},
+  title = {EEG microstates of wakefulness and NREM sleep.},
+  journal = {NeuroImage},
+  school = {Brain Imaging Center, Department of Neurology, University of Frankfurt, a.M., Germany. verena.brodbeck@kgu.de},
+  year = {2012},
+  volume = {62},
+  number = {3},
+  pages = {2129--2139},
+  url = {http://dx.doi.org/10.1016/j.neuroimage.2012.05.060},
+  doi = {http://doi.org/10.1016/j.neuroimage.2012.05.060}
+}
+</pre></td>
+</tr>
+<tr id="Jahnke2012" class="entry">
+	<td>Jahnke, K., von Wegner, F., Morzelewski, A., Borisov, S., Maischein, M., Steinmetz, H. and Laufs, H.</td>
+	<td>To wake or not to wake? The two-sided nature of the human K-complex. <p class="infolinks">[<a href="javascript:toggleInfo('Jahnke2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Jahnke2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>NeuroImage<br/>Vol. 59(2), pp. 1631-1638<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2011.09.013">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2011.09.013">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Jahnke2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Sleep fosters performance but likewise renders creatures insensitive to environmental threat. The brain balances between sleep promotion and protection during light sleep. One associated electrophysiological hallmark is the K-complex (KC), the sleep promoting versus arousal inducing role of which is under debate. We examined 37 subjects using EEG-combined fMRI and found KC-associated positive BOLD signal changes in subcortical (brainstem, thalamus), sensory and motor, midline and regions which form part of the default mode network, and negative changes in the anterior insula. Connectivity analysis revealed the primary auditory cortex as the first region to be influenced during the KC and that midline regions activated successively from front to back in association with the sleep protecting part of the KC. Our findings support thalamic involvement in KC mediation and an association of KCs with subcortical arousal mechanisms: activations in sensory areas suggest the existence of low level information processing during KC limited by anterior insula disengagement suggesting a two-sided nature of the KC: it embodies an arousal with subsequent sleep-guarding counteraction that might on the one hand serve periodical monitoring of the environment with basic information processing and on the other hand protect the continuity of sleep and thus its restoring effect.</td>
+</tr>
+<tr id="bib_Jahnke2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Jahnke2012,
+  author = {Jahnke, Kolja and von Wegner, F. and Morzelewski, Astrid and Borisov, Sergey and Maischein, Marcella and Steinmetz, Helmuth and Laufs, Helmut},
+  title = {To wake or not to wake? The two-sided nature of the human K-complex.},
+  journal = {NeuroImage},
+  school = {Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany.},
+  year = {2012},
+  volume = {59},
+  number = {2},
+  pages = {1631--1638},
+  url = {http://dx.doi.org/10.1016/j.neuroimage.2011.09.013},
+  doi = {http://doi.org/10.1016/j.neuroimage.2011.09.013}
+}
+</pre></td>
+</tr>
+<tr id="Tagliazucchi2012" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Brodbeck, V. and Laufs, H.</td>
+	<td>Dynamic BOLD functional connectivity in humans and its electrophysiological correlates. <p class="infolinks">[<a href="javascript:toggleInfo('Tagliazucchi2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Tagliazucchi2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>Front Hum Neurosci<br/>Vol. 6, pp. 339<i>School</i>: Neurology Department and Brain Imaging Center, Goethe University Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fnhum.2012.00339">DOI</a> <a href="http://dx.doi.org/10.3389/fnhum.2012.00339">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Tagliazucchi2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Neural oscillations subserve many human perceptual and cognitive operations. Accordingly, brain functional connectivity is not static in time, but fluctuates dynamically following the synchronization and desynchronization of neural populations. This dynamic functional connectivity has recently been demonstrated in spontaneous fluctuations of the Blood Oxygen Level-Dependent (BOLD) signal, measured with functional Magnetic Resonance Imaging (fMRI). We analyzed temporal fluctuations in BOLD connectivity and their electrophysiological correlates, by means of long (≈50 min) joint electroencephalographic (EEG) and fMRI recordings obtained from two populations: 15 awake subjects and 13 subjects undergoing vigilance transitions. We identified positive and negative correlations between EEG spectral power (extracted from electrodes covering different scalp regions) and fMRI BOLD connectivity in a network of 90 cortical and subcortical regions (with millimeter spatial resolution). In particular, increased alpha (8-12 Hz) and beta (15-30 Hz) power were related to decreased functional connectivity, whereas gamma (30-60 Hz) power correlated positively with BOLD connectivity between specific brain regions. These patterns were altered for subjects undergoing vigilance changes, with slower oscillations being correlated with functional connectivity increases. Dynamic BOLD functional connectivity was reflected in the fluctuations of graph theoretical indices of network structure, with changes in frontal and central alpha power correlating with average path length. Our results strongly suggest that fluctuations of BOLD functional connectivity have a neurophysiological origin. Positive correlations with gamma can be interpreted as facilitating increased BOLD connectivity needed to integrate brain regions for cognitive performance. Negative correlations with alpha suggest a temporary functional weakening of local and long-range connectivity, associated with an idling state.</td>
+</tr>
+<tr id="bib_Tagliazucchi2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Tagliazucchi2012,
+  author = {Tagliazucchi, Enzo and von Wegner, F. and Morzelewski, Astrid and Brodbeck, Verena and Laufs, Helmut},
+  title = {Dynamic BOLD functional connectivity in humans and its electrophysiological correlates.},
+  journal = {Front Hum Neurosci},
+  school = {Neurology Department and Brain Imaging Center, Goethe University Frankfurt am Main, Germany.},
+  year = {2012},
+  volume = {6},
+  pages = {339},
+  url = {http://dx.doi.org/10.3389/fnhum.2012.00339},
+  doi = {http://doi.org/10.3389/fnhum.2012.00339}
+}
+</pre></td>
+</tr>
+<tr id="Tagliazucchi2012a" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Borisov, S., Jahnke, K. and Laufs, H.</td>
+	<td>Automatic sleep staging using fMRI functional connectivity data. <p class="infolinks">[<a href="javascript:toggleInfo('Tagliazucchi2012a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Tagliazucchi2012a','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>NeuroImage<br/>Vol. 63(1), pp. 63-72<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Germ. tagliazucchi.enzo@googlemail.com&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2012.06.036">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2012.06.036">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Tagliazucchi2012a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Recent EEG-fMRI studies have shown that different stages of sleep are associated with changes in both brain activity and functional connectivity. These results raise the concern that lack of vigilance measures in resting state experiments may introduce confounds and contamination due to subjects falling asleep inside the scanner. In this study we present a method to perform automatic sleep staging using only fMRI functional connectivity data, thus providing vigilance information while circumventing the technical demands of simultaneous recording of EEG, the gold standard for sleep scoring. The features to classify are the linear correlation values between 20 cortical regions identified using independent component analysis and two regions in the bilateral thalamus. The method is based on the construction of binary support vector machine classifiers discriminating between all pairs of sleep stages and the subsequent combination of them into multiclass classifiers. Different multiclass schemes and kernels are explored. After parameter optimization through 5-fold cross validation we achieve accuracies over 0.8 in the binary problem with functional connectivities obtained for epochs as short as 60s. The multiclass classifier generalizes well to two independent datasets (accuracies over 0.8 in both sets) and can be efficiently applied to any dataset using a sliding window procedure. Modeling vigilance states in resting state analysis will avoid confounded inferences and facilitate the study of vigilance states themselves. We thus consider the method introduced in this study a novel and practical contribution for monitoring vigilance levels inside an MRI scanner without the need of extra recordings other than fMRI BOLD signals.</td>
+</tr>
+<tr id="bib_Tagliazucchi2012a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Tagliazucchi2012a,
+  author = {Tagliazucchi, Enzo and von Wegner, F. and Morzelewski, Astrid and Borisov, Sergey and Jahnke, Kolja and Laufs, Helmut},
+  title = {Automatic sleep staging using fMRI functional connectivity data.},
+  journal = {NeuroImage},
+  school = {Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Germ. tagliazucchi.enzo@googlemail.com},
+  year = {2012},
+  volume = {63},
+  number = {1},
+  pages = {63--72},
+  url = {http://dx.doi.org/10.1016/j.neuroimage.2012.06.036},
+  doi = {http://doi.org/10.1016/j.neuroimage.2012.06.036}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2012" class="entry">
+	<td>von Wegner, F., Wieder, N. and Fink, R.H.A.</td>
+	<td>Simulation strategies for calcium microdomains and calcium-regulated calcium channels. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2012','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2012','bibtex')">BibTeX</a>]</p></td>
+	<td>2012</td>
+	<td>Adv Exp Med Biol<br/>Vol. 740, pp. 553-567<i>School</i>: Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/978-94-007-2888-2_25">DOI</a> <a href="http://dx.doi.org/10.1007/978-94-007-2888-2_25">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2012" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In this article, we present an overview of simulation strategies in the context of subcellular domains where calcium-dependent signaling plays an important role. The presentation follows the spatial and temporal scales involved and represented by each algorithm. As an exemplary cell type, we will mainly cite work done on striated muscle cells, i.e. skeletal and cardiac muscle. For these cells, a wealth of ultrastructural, biophysical and electrophysiological data is at hand. Moreover, these cells also express ubiquitous signaling pathways as they are found in many other cell types and thus, the generalization of the methods and results presented here is straightforward.The models considered comprise the basic calcium signaling machinery as found in most excitable cell types including Ca(2+) ions, diffusible and stationary buffer systems, and calcium regulated calcium release channels. Simulation strategies can be differentiated in stochastic and deterministic algorithms. Historically, deterministic approaches based on the macroscopic reaction rate equations were the first models considered. As experimental methods elucidated highly localized Ca(2+) signaling events occurring in femtoliter volumes, stochastic methods were increasingly considered. However, detailed simulations of single molecule trajectories are rarely performed as the computational cost implied is too large. On the mesoscopic level, Gillespie's algorithm is extensively used in the systems biology community and with increasing frequency also in models of microdomain calcium signaling. To increase computational speed, fast approximations were derived from Gillespie's exact algorithm, most notably the chemical Langevin equation and the τ-leap algorithm. Finally, in order to integrate deterministic and stochastic effects in multiscale simulations, hybrid algorithms are increasingly used. These include stochastic models of ion channels combined with deterministic descriptions of the calcium buffering and diffusion system on the one hand, and algorithms that switch between deterministic and stochastic simulation steps in a context-dependent manner on the other. The basic assumptions of the listed methods as well as implementation schemes are given in the text. We conclude with a perspective on possible future developments of the field.</td>
+</tr>
+<tr id="bib_Wegner2012" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2012,
+  author = {von Wegner, F. and Wieder, Nicolas and Fink, Rainer H A.},
+  title = {Simulation strategies for calcium microdomains and calcium-regulated calcium channels.},
+  journal = {Adv Exp Med Biol},
+  school = {Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de},
+  year = {2012},
+  volume = {740},
+  pages = {553--567},
+  url = {http://dx.doi.org/10.1007/978-94-007-2888-2_25},
+  doi = {http://doi.org/10.1007/978-94-007-2888-2_25}
+}
+</pre></td>
+</tr>
+<tr id="Baudrexel2011" class="entry">
+	<td>Baudrexel, S., Witte, T., Seifried, C., von Wegner, F., Beissner, F., Klein, J.C., Steinmetz, H., Deichmann, R., Roeper, J. and Hilker, R.</td>
+	<td>Resting state fMRI reveals increased subthalamic nucleus-motor cortex connectivity in Parkinson's disease. <p class="infolinks">[<a href="javascript:toggleInfo('Baudrexel2011','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Baudrexel2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>Neuroimage<br/>Vol. 55(4), pp. 1728-1738<i>School</i>: Department of Neurology, University Hospital, Goethe University Frankfurt am Main, Schleusenweg 2-16, D-60528 Frankfurt am Main, Germany; Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, D-60528 Frankfurt am Main, Germany; Department of Neurophysiology, Interdisciplinary Center for Neuroscience Frankfurt, Heinrich-Hoffmann-Str. 7, 60528 Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2011.01.017">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2011.01.017">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Baudrexel2011" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Parkinson's disease (PD) is associated with abnormal hypersynchronicity in basal ganglia-thalamo-cortical loops. The clinical effectiveness of subthalamic nucleus (STN) high frequency stimulation indicates a crucial role of this nucleus within the affected motor networks in PD. Here we investigate alterations in the functional connectivity (FC) profile of the STN using resting state BOLD correlations on a voxel-by-voxel basis in functional magnetic resonance imaging (fMRI). We compared early stage PD patients (n=31) during the medication-off state with healthy controls (n=44). The analysis revealed increased FC between the STN and cortical motor areas (BA 4 and 6) in PD patients in accordance with electrophysiological studies. Moreover, FC analysis of the primary motor cortex (M1) hand area revealed that the FC increase was primarily found in the STN area within the basal ganglia. These findings are in good agreement with recent experimental data, suggesting that an increased STN-motor cortex synchronicity mediated via the so called hyperdirect motor cortex-subthalamic pathway might play a fundamental role in the pathophysiology of PD. An additional subgroup analysis was performed according to the presence (n=16) or absence (n=15) of tremor in patients. Compared to healthy controls tremor patients showed increased STN FC specifically in the hand area of M1 and the primary sensory cortex. In non-tremor patients, increased FC values were also found between the STN and midline cortical motor areas including the SMA. Taken together our results underline the importance of the STN as a key node for the modulation of BG-cortical motor network activity in PD patients.</td>
+</tr>
+<tr id="bib_Baudrexel2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Baudrexel2011,
+  author = {Simon Baudrexel and Torsten Witte and Carola Seifried and von Wegner, F. and Florian Beissner and Johannes C Klein and Helmuth Steinmetz and Ralf Deichmann and Jochen Roeper and Rüdiger Hilker},
+  title = {Resting state fMRI reveals increased subthalamic nucleus-motor cortex connectivity in Parkinson's disease.},
+  journal = {Neuroimage},
+  school = {Department of Neurology, University Hospital, Goethe University Frankfurt am Main, Schleusenweg 2-16, D-60528 Frankfurt am Main, Germany; Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, D-60528 Frankfurt am Main, Germany; Department of Neurophysiology, Interdisciplinary Center for Neuroscience Frankfurt, Heinrich-Hoffmann-Str. 7, 60528 Frankfurt am Main, Germany.},
+  year = {2011},
+  volume = {55},
+  number = {4},
+  pages = {1728--1738},
+  url = {http://dx.doi.org/10.1016/j.neuroimage.2011.01.017},
+  doi = {http://doi.org/10.1016/j.neuroimage.2011.01.017}
+}
+</pre></td>
+</tr>
+<tr id="Voelkers2011" class="entry">
+	<td>Völkers, M., Weidenhammer, C., Herzog, N., Qiu, G., Spaich, K., von Wegner, F., Peppel, K., Müller, O.J., Schinkel, S., Rabinowitz, J.E., Hippe, H.-J., Brinks, H., Katus, H.A., Koch, W.J., Eckhart, A.D., Friedrich, O. and Most, P.</td>
+	<td>The inotropic peptide βARKct improves βAR responsiveness in normal and failing cardiomyocytes through G(βγ)-mediated L-type calcium current disinhibition. <p class="infolinks">[<a href="javascript:toggleInfo('Voelkers2011','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Voelkers2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>Circ Res<br/>Vol. 108(1), pp. 27-39<i>School</i>: Center for Molecular and Translational Cardiology, University of Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1161/CIRCRESAHA.110.225201">DOI</a> <a href="http://dx.doi.org/10.1161/CIRCRESAHA.110.225201">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Voelkers2011" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The G(βγ)-sequestering peptide β-adrenergic receptor kinase (βARK)ct derived from the G-protein-coupled receptor kinase (GRK)2 carboxyl terminus has emerged as a promising target for gene-based heart failure therapy. Enhanced downstream cAMP signaling has been proposed as the underlying mechanism for increased β-adrenergic receptor (βAR) responsiveness. However, molecular targets mediating improved cardiac contractile performance by βARKct and its impact on G(βγ)-mediated signaling have yet to be fully elucidated.We sought to identify G(βγ)-regulated targets and signaling mechanisms conveying βARKct-mediated enhanced βAR responsiveness in normal (NC) and failing (FC) adult rat ventricular cardiomyocytes.Assessing viral-based βARKct gene delivery with electrophysiological techniques, analysis of contractile performance, subcellular Ca²(+) handling, and site-specific protein phosphorylation, we demonstrate that βARKct enhances the cardiac L-type Ca²(+) channel (LCC) current (I(Ca)) both in NCs and FCs on βAR stimulation. Mechanistically, βARKct augments I(Ca) by preventing enhanced inhibitory interaction between the α1-LCC subunit (Cav1.2α) and liberated G(βγ) subunits downstream of activated βARs. Despite improved βAR contractile responsiveness, βARKct neither increased nor restored cAMP-dependent protein kinase (PKA) and calmodulin-dependent kinase II signaling including unchanged protein kinase (PK)Cε, extracellular signal-regulated kinase (ERK)1/2, Akt, ERK5, and p38 activation both in NCs and FCs. Accordingly, although βARKct significantly increases I(Ca) and Ca²(+) transients, being susceptible to suppression by recombinant G(βγ) protein and use-dependent LCC blocker, βARKct-expressing cardiomyocytes exhibit equal basal and βAR-stimulated sarcoplasmic reticulum Ca²(+) load, spontaneous diastolic Ca²(+) leakage, and survival rates and were less susceptible to field-stimulated Ca²(+) waves compared with controls.Our study identifies a G(βγ)-dependent signaling pathway attenuating cardiomyocyte I(Ca) on βAR as molecular target for the G(βγ)-sequestering peptide βARKct. Targeted interruption of this inhibitory signaling pathway by βARKct confers improved βAR contractile responsiveness through increased I(Ca) without enhancing regular or restoring abnormal cAMP-signaling. βARKct-mediated improvement of I(Ca) rendered cardiomyocytes neither susceptible to βAR-induced damage nor arrhythmogenic sarcoplasmic reticulum Ca²(+) leakage.</td>
+</tr>
+<tr id="bib_Voelkers2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Voelkers2011,
+  author = {Mirko Völkers and Christian Weidenhammer and Nicole Herzog and Gang Qiu and Kristin Spaich and von Wegner, F. and Karsten Peppel and Oliver J Müller and Stefanie Schinkel and Joseph E Rabinowitz and Hans-Jörg Hippe and Henriette Brinks and Hugo A Katus and Walter J Koch and Andrea D Eckhart and Oliver Friedrich and Patrick Most},
+  title = {The inotropic peptide βARKct improves βAR responsiveness in normal and failing cardiomyocytes through G(βγ)-mediated L-type calcium current disinhibition.},
+  journal = {Circ Res},
+  school = {Center for Molecular and Translational Cardiology, University of Heidelberg, Germany.},
+  year = {2011},
+  volume = {108},
+  number = {1},
+  pages = {27--39},
+  url = {http://dx.doi.org/10.1161/CIRCRESAHA.110.225201},
+  doi = {http://doi.org/10.1161/CIRCRESAHA.110.225201}
+}
+</pre></td>
+</tr>
+<tr id="Wieder2011" class="entry">
+	<td>Wieder, N., Fink, R.H.A. and von Wegner, F.</td>
+	<td>Exact and approximate stochastic simulation of intracellular calcium dynamics. <p class="infolinks">[<a href="javascript:toggleInfo('Wieder2011','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wieder2011','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>J Biomed Biotechnol<br/>Vol. 2011, pp. 572492<i>School</i>: Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, 69120 Heidelberg, Germany. nwieder@ix.urz.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1155/2011/572492">DOI</a> <a href="http://dx.doi.org/10.1155/2011/572492">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wieder2011" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In simulations of chemical systems, the main task is to find an exact or approximate solution of the chemical master equation (CME) that satisfies certain constraints with respect to computation time and accuracy. While Brownian motion simulations of single molecules are often too time consuming to represent the mesoscopic level, the classical Gillespie algorithm is a stochastically exact algorithm that provides satisfying results in the representation of calcium microdomains. Gillespie's algorithm can be approximated via the tau-leap method and the chemical Langevin equation (CLE). Both methods lead to a substantial acceleration in computation time and a relatively small decrease in accuracy. Elimination of the noise terms leads to the classical, deterministic reaction rate equations (RRE). For complex multiscale systems, hybrid simulations are increasingly proposed to combine the advantages of stochastic and deterministic algorithms. An often used exemplary cell type in this context are striated muscle cells (e.g., cardiac and skeletal muscle cells). The properties of these cells are well described and they express many common calcium-dependent signaling pathways. The purpose of the present paper is to provide an overview of the aforementioned simulation approaches and their mutual relationships in the spectrum ranging from stochastic to deterministic algorithms.</td>
+</tr>
+<tr id="bib_Wieder2011" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wieder2011,
+  author = {Nicolas Wieder and Rainer H A Fink and von Wegner, F.},
+  title = {Exact and approximate stochastic simulation of intracellular calcium dynamics.},
+  journal = {J Biomed Biotechnol},
+  school = {Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, 69120 Heidelberg, Germany. nwieder@ix.urz.uni-heidelberg.de},
+  year = {2011},
+  volume = {2011},
+  pages = {572492},
+  url = {http://dx.doi.org/10.1155/2011/572492},
+  doi = {http://doi.org/10.1155/2011/572492}
+}
+</pre></td>
+</tr>
+<tr id="Wieder2011a" class="entry">
+	<td>Wieder, N., Fink, R. and von Wegner, F.</td>
+	<td>Mesoscopic simulation of subcellular calcium microdomains and calcium-regulated calcium channels. <p class="infolinks">[<a href="javascript:toggleInfo('Wieder2011a','bibtex')">BibTeX</a>]</p></td>
+	<td>2011</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="bib_Wieder2011a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@book{Wieder2011a,
+  author = {Nicolas Wieder and Rainer Fink and von Wegner, F.},
+  title = {Mesoscopic simulation of subcellular calcium microdomains and calcium-regulated calcium channels.},
+  publisher = {Nova Publishers},
+  year = {2011}
+}
+</pre></td>
+</tr>
+<tr id="Edwards2010" class="entry">
+	<td>Edwards, J.N., Murphy, R.M., Cully, T.R., von Wegner, F., Friedrich, O. and Launikonis, B.S.</td>
+	<td>Ultra-rapid activation and deactivation of store-operated Ca^2^+ entry in skeletal muscle. <p class="infolinks">[<a href="javascript:toggleInfo('Edwards2010','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Edwards2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Cell Calcium<br/>Vol. 47(5), pp. 458-467<i>School</i>: The University of Queensland, Brisbane, Australia.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.ceca.2010.04.001">DOI</a> <a href="http://dx.doi.org/10.1016/j.ceca.2010.04.001">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Edwards2010" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Skeletal muscle is highly specialized for the rapid delivery of Ca(2+) to the contractile apparatus during excitation-contraction coupling (EC coupling). Previous studies have shown the presence of a relatively fast-activated store-operated Ca(2+) entry (SOCE) mechanism (<1s) to be present in skeletal muscle, unlike the situation occurring in non-excitable cells. We simultaneously imaged [Ca(2+)] in the t-system and cytoplasm in mechanically skinned fibers during SR Ca(2+) release and observed both cell-wide Ca(2+) release and Ca(2+) waves. SOCE activation followed cell-wide Ca(2+) release from high sarcoplasmic reticulum (SR) [Ca(2+)] ([Ca(2+)](SR)) by seconds, consistent with depletion of [Ca(2+)](SR) to an absolute threshold for SOCE and an unformed SOCE complex at high [Ca(2+)](SR). Ca(2+) waves occurred at low [Ca(2+)](SR), close to the threshold for SOCE, minimizing the time between Ca(2+) release and Ca(2+) influx. Local activation of SOCE during Ca(2+) waves occurred in approximately 27ms following local initiation of SR depletion indicating a steep relationship between [Ca(2+)](SR) and SOCE activation. Most of this delay was due to slow release of Ca(2+) from SR, leaving only milliseconds at most for the activation of Ca(2+) entry following store depletion. SOCE was also observed to deactivate effectively instantly during store refilling at low [Ca(2+)](SR). These rapid kinetics of SOCE persisted as subsequent Ca(2+) waves propagated along the fiber. Thus we show for the first time millisecond activation and deactivation of SOCE during low amplitude [Ca(2+)](SR) oscillations at low [Ca(2+)](SR). To account for the observed Ca(2+) movements we propose the SOCE complex forms during the progressive depletion of [Ca(2+)](SR) prior to reaching the activation threshold of SOCE and this complex remains stable at low [Ca(2+)](SR).</td>
+</tr>
+<tr id="bib_Edwards2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Edwards2010,
+  author = {Joshua N Edwards and Robyn M Murphy and Tanya R Cully and von Wegner, F. and Oliver Friedrich and Bradley S Launikonis},
+  title = {Ultra-rapid activation and deactivation of store-operated Ca^2^+ entry in skeletal muscle.},
+  journal = {Cell Calcium},
+  school = {The University of Queensland, Brisbane, Australia.},
+  year = {2010},
+  volume = {47},
+  number = {5},
+  pages = {458--467},
+  url = {http://dx.doi.org/10.1016/j.ceca.2010.04.001},
+  doi = {http://doi.org/10.1016/j.ceca.2010.04.001}
+}
+</pre></td>
+</tr>
+<tr id="Edwards2010a" class="entry">
+	<td>Edwards, J.N., Friedrich, O., Cully, T.R., von Wegner, F., Murphy, R.M. and Launikonis, B.S.</td>
+	<td>Upregulation of store-operated Ca^2^+ entry in dystrophic mdx mouse muscle. <p class="infolinks">[<a href="javascript:toggleInfo('Edwards2010a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Edwards2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Am J Physiol Cell Physiol<br/>Vol. 299(1), pp. C42-C50<i>School</i>: School of Biomedical Sciences, University of Queensland, Brisbane, QLD, Australia.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1152/ajpcell.00524.2009">DOI</a> <a href="http://dx.doi.org/10.1152/ajpcell.00524.2009">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Edwards2010a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Store-operated Ca(2+) entry (SOCE) is an important mechanism in virtually all cells. In adult skeletal muscle, this mechanism is highly specialized for the rapid delivery of Ca(2+) from the transverse tubule into the junctional cleft during periods of depleting Ca(2+) release. In dystrophic muscle fibers, SOCE may be a source of Ca(2+) overload, leading to cell necrosis. However, this possibility is yet to be examined in an adult fiber during Ca(2+) release. To examine this, Ca(2+) in the tubular system and cytoplasm were simultaneously imaged during direct release of Ca(2+) from sarcoplasmic reticulum (SR) in skeletal muscle fibers from healthy (wild-type, WT) and dystrophic mdx mouse. The mdx fibers were found to have normal activation and deactivation properties of SOCE. However, a depression of the cytoplasmic Ca(2+) transient in mdx compared with WT fibers was observed, as was a shift in the SOCE activation and deactivation thresholds to higher SR Ca(2+) concentrations ([Ca(2+)](SR)). The shift in SOCE activation and deactivation thresholds was accompanied by an approximately threefold increase in STIM1 and Orai1 proteins in dystrophic muscle. While the mdx fibers can introduce more Ca(2+) into the fiber for an equivalent depletion of [Ca(2+)](SR) via SOCE, it remains unclear whether this is deleterious.</td>
+</tr>
+<tr id="bib_Edwards2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Edwards2010a,
+  author = {Joshua N Edwards and Oliver Friedrich and Tanya R Cully and von Wegner, F. and Robyn M Murphy and Bradley S Launikonis},
+  title = {Upregulation of store-operated Ca^2^+ entry in dystrophic mdx mouse muscle.},
+  journal = {Am J Physiol Cell Physiol},
+  school = {School of Biomedical Sciences, University of Queensland, Brisbane, QLD, Australia.},
+  year = {2010},
+  volume = {299},
+  number = {1},
+  pages = {C42--C50},
+  url = {http://dx.doi.org/10.1152/ajpcell.00524.2009},
+  doi = {http://doi.org/10.1152/ajpcell.00524.2009}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2010" class="entry">
+	<td>Friedrich, O., Both, M., Weber, C., Schürmann, S., Teichmann, M.D.H., von Wegner, F., Fink, R.H.A., Vogel, M., Chamberlain, J.S. and Garbe, C.</td>
+	<td>Microarchitecture is severely compromised but motor protein function is preserved in dystrophic mdx skeletal muscle. <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2010','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Biophys J<br/>Vol. 98(4), pp. 606-616<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, Ruprecht Karls University, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.bpj.2009.11.005">DOI</a> <a href="http://dx.doi.org/10.1016/j.bpj.2009.11.005">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2010" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Progressive force loss in Duchenne muscular dystrophy is characterized by degeneration/regeneration cycles and fibrosis. Disease progression may involve structural remodeling of muscle tissue. An effect on molecular motorprotein function may also be possible. We used second harmonic generation imaging to reveal vastly altered subcellular sarcomere microarchitecture in intact single dystrophic mdx muscle cells (approximately 1 year old). Myofibril tilting, twisting, and local axis deviations explain at least up to 20&percnt; of force drop during unsynchronized contractile activation as judged from cosine angle sums of myofibril orientations within mdx fibers. In contrast, in vitro motility assays showed unaltered sliding velocities of single mdx fiber myosin extracts. Closer quantification of the microarchitecture revealed that dystrophic fibers had significantly more Y-shaped sarcomere irregularities ("verniers") than wild-type fibers (approximately 130/1000 microm(3) vs. approximately 36/1000 microm(3)). In transgenic mini-dystrophin-expressing fibers, ultrastructure was restored (approximately 38/1000 microm(3) counts). We suggest that in aged dystrophic toe muscle, progressive force loss is reflected by a vastly deranged micromorphology that prevents a coordinated and aligned contraction. Second harmonic generation imaging may soon be available in routine clinical diagnostics, and in this work we provide valuable imaging tools to track and quantify ultrastructural worsening in Duchenne muscular dystrophy, and to judge the beneficial effects of possible drug or gene therapies.</td>
+</tr>
+<tr id="bib_Friedrich2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2010,
+  author = {O. Friedrich and M. Both and C. Weber and S. Schürmann and M. D H Teichmann and von Wegner, F. and R. H A Fink and M. Vogel and J. S. Chamberlain and C. Garbe},
+  title = {Microarchitecture is severely compromised but motor protein function is preserved in dystrophic mdx skeletal muscle.},
+  journal = {Biophys J},
+  school = {Medical Biophysics, Institute of Physiology and Pathophysiology, Ruprecht Karls University, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de},
+  year = {2010},
+  volume = {98},
+  number = {4},
+  pages = {606--616},
+  url = {http://dx.doi.org/10.1016/j.bpj.2009.11.005},
+  doi = {http://doi.org/10.1016/j.bpj.2009.11.005}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2010a" class="entry">
+	<td>Friedrich, O., Fink, R.H.A. and von Wegner, F.</td>
+	<td>New factors contributing to dynamic calcium regulation in the skeletal muscle triad - a crowded place <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2010a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2010a','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Biophysical Reviews<br/>Vol. 2, pp. 29-38&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s12551-009-0027-2">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2010a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Skeletal muscle is a highly organized tissue that has to be optimized for fast signalling events conveying electrical excitation to contractile response. The site of electro-chemico-mechanical coupling is the skeletal muscle triad where two membrane systems, the extracellular t-tubules and the intracellular sarcoplasmic reticulum, come into very close contact. Structure fits function here and the signalling proteins DHPR and RyR1 were the first to be discovered to bridge this gap in a conformational coupling arrangement. Since then, however, new proteins and more signalling cascades have been identified just in the last decade, adding more diversity and fine tuning to the regulation of excitation-contraction coupling (ECC) and control over Ca2+ store content. The concept of Ca2+ entry into working skeletal muscle has become attractive again with the experimental evidence summarized in this review. Store-operated Ca2+ entry (SOCE), excitation-coupled Ca2+ entry (ECCE), action-potential-activated Ca2+ current (APACC), and retrograde EC-coupling (ECC) are new concepts additional to the conventional orthograde ECC; they have provided fascinating new insights into muscle physiology. In this review, we discuss the discovery of these pathways, their potential roles, and the signalling proteins involved that show that the triad may become a crowded place in time.</td>
+</tr>
+<tr id="bib_Friedrich2010a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2010a,
+  author = {Oliver Friedrich and Rainer H. A. Fink and von Wegner, F.},
+  title = {New factors contributing to dynamic calcium regulation in the skeletal muscle triad - a crowded place},
+  journal = {Biophysical Reviews},
+  year = {2010},
+  volume = {2},
+  pages = {29-38},
+  doi = {http://doi.org/10.1007/s12551-009-0027-2}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2010b" class="entry">
+	<td>Friedrich, O., Hund, E. and von Wegner, F.</td>
+	<td>Enhanced muscle shortening and impaired Ca^2^+ channel function in an acute septic myopathy model. <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2010b','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2010b','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>J Neurol<br/>Vol. 257(4), pp. 546-555<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, University of Heidelberg, INF 326, 69120, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s00415-009-5362-5">DOI</a> <a href="http://dx.doi.org/10.1007/s00415-009-5362-5">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2010b" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Myopathies in critically ill patients are increasingly documented. Various animal models of chronic sepsis have been employed to investigate reduced membrane excitability or altered isometric contractility of skeletal muscle. In contrast, immediate changes occurring during acute sepsis are significantly under-characterised; L-type Ca(2+) channel function or isotonic shortening are examples. We recorded slowly activating L-type Ca(2+) currents (I (Ca)) in voltage-clamped single intact mouse skeletal muscle fibres and tested the effects of acute challenge with serum fractions from critical illness myopathy patients (CIM). Using a high-speed camera system, we simultaneously recorded unloaded fibre shortening during isotonic contractions with unprecedented temporal resolution (approximately 1,600 frames/s). Time courses of fibre lengths and shortening velocity were determined from automated imaging algorithms. CIM fractions acutely induced depression of I (Ca) amplitudes with no shifts in I (Ca)-V-relations. Voltage-dependent inactivation was unaltered and I (Ca) activation and inactivation kinetics were prolonged compared to controls. Unexpectedly, maximum unloaded speed of shortening was slightly faster following CIM serum applications, suggesting a direct action of CIM serum on weak-binding-state cross-bridges. Our results are compatible with a model where CIM serum might acutely reduce a fraction of functional L-type Ca(2+) channels and could account for reduced SR Ca(2+) release and force production in CIM patients. Acute increase in isotonic shortening velocity might be an early diagnostic feature suitable for testing in clinical studies. The acute challenge model is also robust against atrophy or fibre type changes that ordinarily would have to be considered in chronic sepsis models.</td>
+</tr>
+<tr id="bib_Friedrich2010b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2010b,
+  author = {Oliver Friedrich and Ernst Hund and von Wegner, F.},
+  title = {Enhanced muscle shortening and impaired Ca^2^+ channel function in an acute septic myopathy model.},
+  journal = {J Neurol},
+  school = {Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, University of Heidelberg, INF 326, 69120, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de},
+  year = {2010},
+  volume = {257},
+  number = {4},
+  pages = {546--555},
+  url = {http://dx.doi.org/10.1007/s00415-009-5362-5},
+  doi = {http://doi.org/10.1007/s00415-009-5362-5}
+}
+</pre></td>
+</tr>
+<tr id="Schuermann2010" class="entry">
+	<td>Schürmann, S., von Wegner, F., Fink, R.H.A., Friedrich, O. and Vogel, M.</td>
+	<td>Second harmonic generation microscopy probes different states of motor protein interaction in myofibrils. <p class="infolinks">[<a href="javascript:toggleInfo('Schuermann2010','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Schuermann2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Biophys J<br/>Vol. 99(6), pp. 1842-1851<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, Heidelberg University, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.bpj.2010.07.005">DOI</a> <a href="http://dx.doi.org/10.1016/j.bpj.2010.07.005">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Schuermann2010" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The second harmonic generation (SHG) signal intensity sourced from skeletal muscle myosin II strongly depends on the polarization of the incident laser beam relative to the muscle fiber axis. This dependence is related to the second-order susceptibility χ((2)), which can be described by a single component ratio γ under generally assumed symmetries. We precisely extracted γ from SHG polarization dependence curves with an extended focal field model. In murine myofibrillar preparations, we have found two distinct polarization dependencies: With the actomyosin system in the rigor state, γ(rig) has a mean value of γ(rig) = 0.52 (SD = 0.04, n = 55); in a relaxed state where myosin is not bound to actin, γ(rel) has a mean value of γ(rel) = 0.24 (SD = 0.07, n = 70). We observed a similar value in an activated state where the myosin power stroke was pharmacologically inhibited using N-benzyl-p-toluene sulfonamide. In summary, different actomyosin states can be visualized noninvasively with SHG microscopy. Specifically, SHG even allows us to distinguish different actin-bound states of myosin II using γ as a parameter.</td>
+</tr>
+<tr id="bib_Schuermann2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Schuermann2010,
+  author = {Schürmann, Sebastian and von Wegner, Frederic and Fink, Rainer H A and Friedrich, Oliver and Vogel, Martin},
+  title = {Second harmonic generation microscopy probes different states of motor protein interaction in myofibrils.},
+  journal = {Biophys J},
+  school = {Medical Biophysics, Institute of Physiology and Pathophysiology, Heidelberg University, Heidelberg, Germany.},
+  year = {2010},
+  volume = {99},
+  number = {6},
+  pages = {1842--1851},
+  url = {http://dx.doi.org/10.1016/j.bpj.2010.07.005},
+  doi = {http://doi.org/10.1016/j.bpj.2010.07.005}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2010" class="entry">
+	<td>von Wegner, F. and Fink, R.H.A.</td>
+	<td>Stochastic simulation of calcium microdomains in the vicinity of an L-type calcium channel. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2010','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2010','bibtex')">BibTeX</a>]</p></td>
+	<td>2010</td>
+	<td>Eur Biophys J<br/>Vol. 39(7), pp. 1079-1088<i>School</i>: Medical Biophysics, Institute for Physiology and Pathophysiology, University of Heidelberg, INF 326, 69120, Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s00249-009-0504-3">DOI</a> <a href="http://dx.doi.org/10.1007/s00249-009-0504-3">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2010" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We study numerically the local dynamics of the intracellular calcium concentration in the vicinity of a voltage- and calcium-dependent plasma membrane L-type calcium channel. To account for the low number of Ca(2+) ions and buffer molecules present in sub-femtoliter volumes, we use an exact stochastic simulation algorithm including diffusion. We present a novel, unified simulation method that implements reaction-diffusion events of Ca(2+) ions and buffer molecules, stochastic ion channel gating and channel conductance as a multivariate Markov process. For fixed-voltage dynamics, e.g. under voltage-clamp conditions, it is shown that voltage-sensitive channel-gating steps can be incorporated exactly. We compare multi- and single-voxel geometries and show that the single-voxel approach leads to almost identical first- and second-order moments, at much lower computation time. Numerical examples illustrate the variability in local Ca(2+) fluctuations as induced by bursts of channel openings in response to membrane depolarisations. Finally, by introducing calmodulin as a link, it is shown how this variability is passed on to downstream signalling pathways. The method may prove useful to study calcium microdomains and calcium-regulated processes triggered by membrane depolarisations as evoked by, e.g., viral channel-forming proteins during virus-host cell interactions.</td>
+</tr>
+<tr id="bib_Wegner2010" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2010,
+  author = {von Wegner, F. and R. H A Fink},
+  title = {Stochastic simulation of calcium microdomains in the vicinity of an L-type calcium channel.},
+  journal = {Eur Biophys J},
+  school = {Medical Biophysics, Institute for Physiology and Pathophysiology, University of Heidelberg, INF 326, 69120, Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de},
+  year = {2010},
+  volume = {39},
+  number = {7},
+  pages = {1079--1088},
+  url = {http://dx.doi.org/10.1007/s00249-009-0504-3},
+  doi = {http://doi.org/10.1007/s00249-009-0504-3}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2009" class="entry">
+	<td>von Wegner, F., Schurmann, S., Fink, R.H.A., Vogel, M. and Friedrich, O.</td>
+	<td>Motor protein function in skeletal muscle-a multiple scale approach to contractility. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2009','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2009','bibtex')">BibTeX</a>]</p></td>
+	<td>2009</td>
+	<td>IEEE Trans Med Imaging<br/>Vol. 28(10), pp. 1632-1642<i>School</i>: Medical Biophysics Group, Institute of Physiology, University of Heidelberg, 69120 Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1109/TMI.2009.2026171">DOI</a> <a href="http://dx.doi.org/10.1109/TMI.2009.2026171">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2009" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We present an approach to skeletal muscle contractility and its regulation over different scales ranging from biomechanical studies in intact muscle fibers down to the motility and interaction of single motor protein molecules. At each scale, shortening velocities as a measure for weak cross-bridge cycling rates are extracted and compared. Experimental approaches include transmitted light microscopy, second harmonic generation imaging of contracting myofibrils, and fluorescence microscopy of single molecule motility. Each method yields image sequences that are analyzed with automated image processing algorithms to extract the contraction velocity. Using this approach, we show how to isolate the contribution of the motor proteins actin and myosin and their modulation by regulatory proteins from the concerted action of electro-mechanical activation on a more complex cellular scale. The advantage of this approach is that averaged contraction velocities can be determined on the different scales ranging from isolated motor proteins to sarcomere levels in myofibrils and myofibril arrays within the cellular architecture. Our results show that maximum shortening velocities during in situ electrical activation of sarcomere contraction in intact single muscle cells can substantially deviate from sliding velocities obtained in oriented in vitro motility assays of isolated motor proteins showing that biophysical contraction kinetics not simply translate linearly between contractility scales. To adequately resolve the very fast initial mechanical activation kinetics of shortening at each scale, it was necessary to implement high-speed imaging techniques. In the case of intact fibers and single molecule motility, we achieved a major increase in temporal resolution up to frame rates of 200-1000 fps using CMOS image sensor technology. The data we obtained at this unprecedented temporal resolution and the parameters extracted can be used to validate results obtained from computational models of motor protein interaction and skeletal muscle contractility in health and muscle disease. Our approach is feasible to explain the possible underlying mechanisms that contribute to different shortening velocities at different scales and complexities.</td>
+</tr>
+<tr id="bib_Wegner2009" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2009,
+  author = {von Wegner, F. and Sebastian Schurmann and Rainer H A Fink and Martin Vogel and Oliver Friedrich},
+  title = {Motor protein function in skeletal muscle-a multiple scale approach to contractility.},
+  journal = {IEEE Trans Med Imaging},
+  school = {Medical Biophysics Group, Institute of Physiology, University of Heidelberg, 69120 Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de},
+  year = {2009},
+  volume = {28},
+  number = {10},
+  pages = {1632--1642},
+  url = {http://dx.doi.org/10.1109/TMI.2009.2026171},
+  doi = {http://doi.org/10.1109/TMI.2009.2026171}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2008" class="entry">
+	<td>Friedrich*, O., von Wegner, F., Chamberlain, J.S., Fink, R.H.A. and Rohrbach, P.</td>
+	<td>L-type Ca^2^+ channel function is linked to dystrophin expression in mammalian muscle. <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>PLoS One<br/>Vol. 3(3), pp. e1762<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, University of Heidelberg, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1371/journal.pone.0001762">DOI</a> <a href="http://dx.doi.org/10.1371/journal.pone.0001762">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In dystrophic mdx skeletal muscle, aberrant Ca2+ homeostasis and fibre degeneration are found. The absence of dystrophin in models of Duchenne muscular dystrophy (DMD) has been connected to altered ion channel properties e.g. impaired L-type Ca2+ currents. In regenerating mdx muscle, 'revertant' fibres restore dystrophin expression. Their functionality involving DHPR-Ca2+-channels is elusive.We developed a novel 'in-situ' confocal immuno-fluorescence and imaging technique that allows, for the first time, quantitative subcellular dystrophin-DHPR colocalization in individual, non-fixed, muscle fibres. Tubular DHPR signals alternated with second harmonic generation signals originating from myosin. Dystrophin-DHPR colocalization was substantial in wt fibres, but diminished in most mdx fibres. Mini-dystrophin (MinD) expressing fibres successfully restored colocalization. Interestingly, in some aged mdx fibres, colocalization was similar to wt fibres. Most mdx fibres showed very weak membrane dystrophin staining and were classified 'mdx-like'. Some mdx fibres, however, had strong 'wt-like' dystrophin signals and were identified as 'revertants'. Split mdx fibres were mostly 'mdx-like' and are not generally 'revertants'. Correlations between membrane dystrophin and DHPR colocalization suggest a restored putative link in 'revertants'. Using the two-micro-electrode-voltage clamp technique, Ca2+-current amplitudes (i(max)) showed very similar behaviours: reduced amplitudes in most aged mdx fibres (as seen exclusively in young mdx mice) and a few mdx fibres, most likely 'revertants', with amplitudes similar to wt or MinD fibres. Ca2+ current activation curves were similar in 'wt-like' and 'mdx-like' aged mdx fibres and are not the cause for the differences in current amplitudes. i(max) amplitudes were fully restored in MinD fibres.We present evidence for a direct/indirect DHPR-dystrophin interaction present in wt, MinD and 'revertant' mdx fibres but absent in remaining mdx fibres. Our imaging technique reliably detects single isolated 'revertant' fibres that could be used for subsequent physiological experiments to study mechanisms and therapy concepts in DMD.</td>
+</tr>
+<tr id="bib_Friedrich2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2008,
+  author = {Oliver Friedrich* and von Wegner, F.* and Jeffrey S Chamberlain and Rainer H A Fink and Petra Rohrbach},
+  title = {L-type Ca^2^+ channel function is linked to dystrophin expression in mammalian muscle.},
+  journal = {PLoS One},
+  school = {Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, University of Heidelberg, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de},
+  year = {2008},
+  volume = {3},
+  number = {3},
+  pages = {e1762},
+  url = {http://dx.doi.org/10.1371/journal.pone.0001762},
+  doi = {http://doi.org/10.1371/journal.pone.0001762}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2008a" class="entry">
+	<td>Friedrich, O., Weber, C., von Wegner, F., Chamberlain, J.S. and Fink, R.H.A.</td>
+	<td>Unloaded speed of shortening in voltage-clamped intact skeletal muscle fibers from wt, mdx, and transgenic minidystrophin mice using a novel high-speed acquisition system. <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2008a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Biophys J<br/>Vol. 94(12), pp. 4751-4765<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, Ruprecht-Karls-University, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1529/biophysj.107.126557">DOI</a> <a href="http://dx.doi.org/10.1529/biophysj.107.126557">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2008a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Skeletal muscle unloaded shortening has been indirectly determined in the past. Here, we present a novel high-speed optical tracking technique that allows recording of unloaded shortening in single intact, voltage-clamped mammalian skeletal muscle fibers with 2-ms time resolution. L-type Ca(2+) currents were simultaneously recorded. The time course of shortening was biexponential: a fast initial phase, tau(1), and a slower successive phase, tau(2,) with activation energies of 59 kJ/mol and 47 kJ/mol. Maximum unloaded shortening speed, v(u,max), was faster than that derived using other techniques, e.g., approximately 14.0 L(0) s(-1) at 30 degrees C. Our technique also allowed direct determination of shortening acceleration. We applied our technique to single fibers from C57 wild-type, dystrophic mdx, and minidystrophin-expressing mice to test whether unloaded shortening was affected in the pathophysiological mechanism of Duchenne muscular dystrophy. v(u,max) and a(u,max) values were not significantly different in the three strains, whereas tau(1) and tau(2) were increased in mdx fibers. The results were complemented by myosin heavy and light chain (MLC) determinations that showed the same myosin heavy chain IIA profiles in the interossei muscles from the different strains. In mdx muscle, MLC-1f was significantly increased and MLC-2f and MLC-3f somewhat reduced. Fast initial active shortening seems almost unaffected in mdx muscle.</td>
+</tr>
+<tr id="bib_Friedrich2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2008a,
+  author = {O. Friedrich and C. Weber and von Wegner, F. and J. S. Chamberlain and R. H A Fink},
+  title = {Unloaded speed of shortening in voltage-clamped intact skeletal muscle fibers from wt, mdx, and transgenic minidystrophin mice using a novel high-speed acquisition system.},
+  journal = {Biophys J},
+  school = {Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, Ruprecht-Karls-University, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de.},
+  year = {2008},
+  volume = {94},
+  number = {12},
+  pages = {4751--4765},
+  url = {http://dx.doi.org/10.1529/biophysj.107.126557},
+  doi = {http://doi.org/10.1529/biophysj.107.126557}
+}
+</pre></td>
+</tr>
+<tr id="Heinzel2008" class="entry">
+	<td>Heinzel, F.R., Bito, V., Biesmans, L., Wu, M., Detre, E., von Wegner, F., Claus, P., Dymarkowski, S., Maes, F., Bogaert, J., Rademakers, F., D'hooge, J. and Sipido, K.</td>
+	<td>Remodeling of T-tubules and reduced synchrony of Ca^2^+ release in myocytes from chronically ischemic myocardium. <p class="infolinks">[<a href="javascript:toggleInfo('Heinzel2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Heinzel2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Circ Res<br/>Vol. 102(3), pp. 338-346<i>School</i>: Division of Experimental Cardiology, University Hospital Gasthuisberg and University of Leuven, Belgium.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1161/CIRCRESAHA.107.160085">DOI</a> <a href="http://dx.doi.org/10.1161/CIRCRESAHA.107.160085">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Heinzel2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In ventricular cardiac myocytes, T-tubule density is an important determinant of the synchrony of sarcoplasmic reticulum (SR) Ca2+ release and could be involved in the reduced SR Ca2+ release in ischemic cardiomyopathy. We therefore investigated T-tubule density and properties of SR Ca2+ release in pigs, 6 weeks after inducing severe stenosis of the circumflex coronary artery (91+/-3 N=13) with myocardial infarction (8.8+/-2.0&percnt; of total left ventricular mass). Severe dysfunction in the infarct and adjacent myocardium was documented by magnetic resonance and Doppler myocardial velocity imaging. Myocytes isolated from the adjacent myocardium were compared with myocytes from the same region in weight-matched control pigs. T-tubule density quantified from the di-8-ANEPPS (di-8-butyl-amino-naphthyl-ethylene-pyridinium-propyl-sulfonate) sarcolemmal staining was decreased by 27+/-7&percnt; (P<0.05). Synchrony of SR Ca2+ release (confocal line scan images during whole-cell voltage clamp) was reduced in myocardium myocytes. Delayed release (ie, half-maximal [Ca2+]i occurring later than 20 ms) occurred at 35.5+/-6.4&percnt; of the scan line in myocardial infarction versus 22.7+/-2.5&percnt; in control pigs (P<0.05), prolonging the time to peak of the line-averaged [Ca2+]i transient (121+/-9 versus 102+/-5 ms in control pigs, P<0.05). Delayed release colocalized with regions of T-tubule rarefaction and could not be suppressed by activation of protein kinase A. The whole-cell averaged [Ca2+]i transient amplitude was reduced, whereas L-type Ca2+ current density was unchanged and SR content was increased, indicating a reduction in the gain of Ca2+-induced Ca2+ release. In conclusion, reduced T-tubule density during ischemic remodeling is associated with reduced synchrony of Ca2+ release and reduced efficiency of coupling Ca2+ influx to Ca2+ release.</td>
+</tr>
+<tr id="bib_Heinzel2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Heinzel2008,
+  author = {Frank R Heinzel and Virginie Bito and Liesbeth Biesmans and Ming Wu and Elke Detre and von Wegner, F. and Piet Claus and Steven Dymarkowski and Frederik Maes and Jan Bogaert and Frank Rademakers and Jan D'hooge and Karin Sipido},
+  title = {Remodeling of T-tubules and reduced synchrony of Ca^2^+ release in myocytes from chronically ischemic myocardium.},
+  journal = {Circ Res},
+  school = {Division of Experimental Cardiology, University Hospital Gasthuisberg and University of Leuven, Belgium.},
+  year = {2008},
+  volume = {102},
+  number = {3},
+  pages = {338--346},
+  url = {http://dx.doi.org/10.1161/CIRCRESAHA.107.160085},
+  doi = {http://doi.org/10.1161/CIRCRESAHA.107.160085}
+}
+</pre></td>
+</tr>
+<tr id="Schnee2008" class="entry">
+	<td>Schnee*, S., von Wegner, F., Schürmann, S., Ludwig, H., Fink, R. and Friedrich, O.</td>
+	<td>Microdomain Ca^2^+ dynamics in mammalian muscle following prolonged high pressure treatments <p class="infolinks">[<a href="javascript:toggleInfo('Schnee2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Schnee2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Journal of Physics: Conference Series<br/>Vol. 121(11), pp. 112003&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1088/1742-6596/121/11/112003">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Schnee2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: High pressure (HP) applications are an important thermodynamic tool to influence cellular processes. Especially processes that undergo large volume changes, e.g. opening or closing of ion channels, are in particular susceptible to HP treatments. Such volume changes are extremely difficult to assess for intracellular ion channels, like ryanodine receptors (RyR) residing in the membrane of organelles. In skeletal muscle, RyR act as Ca2+ release channels. We previously showed that plasmalemmal Na+ and Ca2+ ion channels were irreversibly altered after prolonged 20 MPa treatments. Here, changes in microdomain Ca2+ levels due to elementary Ca2+ release events (ECRE) were monitored using confocal fluorescence microscopy. We studied ECRE in mammalian skeletal muscle following 3 h HP treatments up to 30 MPa to clarify whether RyR induced intracellular microdomain Ca2+ dynamics was more susceptible to HP treatment compared to surface membrane ion currents. ECRE frequencies exponentially declined with pressure. ECRE amplitudes and rise times (RT) were quite robust towards HP treatments. In contrast, spatial and temporal ECRE extension showed a tendency towards larger values up to 20 MPa but declined for higher pressures. Activation volumes for pressure-induced persistent ECRE alterations were zero for RT but showed a bimodal behavior for event duration. It seems that although ECRE frequencies are markedly reduced, ECRE morphology is less affected by HP. In particular, RyR opening time is practically unaltered and the observed morphological ECRE changes might reflect alterations in local Ca2+ buffers and Ca2+ concentration profiles rather than involvement of RyR in mammalian skeletal muscle.</td>
+</tr>
+<tr id="bib_Schnee2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Schnee2008,
+  author = {Sandro Schnee* and von Wegner, F.* and Sebastian Schürmann and Horst Ludwig and Rainer Fink and Oliver Friedrich},
+  title = {Microdomain Ca^2^+ dynamics in mammalian muscle following prolonged high pressure treatments},
+  journal = {Journal of Physics: Conference Series},
+  year = {2008},
+  volume = {121},
+  number = {11},
+  pages = {112003},
+  doi = {http://doi.org/10.1088/1742-6596/121/11/112003}
+}
+</pre></td>
+</tr>
+<tr id="Teichmann2008" class="entry">
+	<td>Teichmann, M.D.H., von Wegner, F., Fink, R.H.A., Chamberlain, J.S., Launikonis, B.S., Martinac, B. and Friedrich, O.</td>
+	<td>Inhibitory control over Ca^2^+ sparks via mechanosensitive channels is disrupted in dystrophin deficient muscle but restored by mini-dystrophin expression. <p class="infolinks">[<a href="javascript:toggleInfo('Teichmann2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Teichmann2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>PLoS One<br/>Vol. 3(11), pp. e3644<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, Ruprecht-Karls-University, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1371/journal.pone.0003644">DOI</a> <a href="http://dx.doi.org/10.1371/journal.pone.0003644">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Teichmann2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: In dystrophic skeletal muscle, osmotic stimuli somehow relieve inhibitory control of dihydropyridine receptors (DHPR) on spontaneous sarcoplasmic reticulum elementary Ca(2+) release events (ECRE) in high Ca(2+) external environments. Such 'uncontrolled' Ca(2+) sparks were suggested to act as dystrophic signals. They may be related to mechanosensitive pathways but the mechanisms are elusive. Also, it is not known whether truncated dystrophins can correct the dystrophic disinhibition.We recorded ECRE activity in single intact fibers from adult wt, mdx and mini-dystrophin expressing mice (MinD) under resting isotonic conditions and following hyper-/hypo-osmolar external shock using confocal microscopy and imaging techniques. Isotonic ECRE frequencies were small in wt and MinD fibers, but were markedly increased in mdx fibers. Osmotic challenge dramatically increased ECRE activity in mdx fibers. Sustained osmotic challenge induced marked exponential ECRE activity adaptation that was three times faster in mdx compared to wt and MinD fibers. Rising external Ca(2+) concentrations amplified osmotic ECRE responses. The eliminated ECRE suppression in intact osmotically stressed mdx fibers was completely and reversibly resuscitated by streptomycine (200 microM), spider peptide GsMTx-4 (5 microM) and Gd(3+) (20 microM) that block unspecific, specific cationic and Ca(2+) selective mechanosensitive channels (MsC), respectively. ECRE morphology was not substantially altered by membrane stress. During hyperosmotic challenge, membrane potentials were polarised and a putative depolarisation through aberrant MsC negligible excluding direct activation of ECRE through tubular depolarisation.Dystrophin suppresses spontaneous ECRE activity by control of mechanosensitive pathways which are suggested to interact with the inhibitory DHPR loop to the ryanodine receptor. MsC-related disinhibition prevails in dystrophic muscle and can be resuscitated by transgenic mini-dystrophin expression. Our results have important implications for the pathophysiology of DMD where abnormal MsC in dystrophic muscle confer disruption of microdomain Ca(2+) homeostasis. MsC blockers should have considerable therapeutic potential if more muscle specific compounds can be found.</td>
+</tr>
+<tr id="bib_Teichmann2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Teichmann2008,
+  author = {Martin D H Teichmann and von Wegner, F. and Rainer H A Fink and Jeffrey S Chamberlain and Bradley S Launikonis and Boris Martinac and Oliver Friedrich},
+  title = {Inhibitory control over Ca^2^+ sparks via mechanosensitive channels is disrupted in dystrophin deficient muscle but restored by mini-dystrophin expression.},
+  journal = {PLoS One},
+  school = {Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, Ruprecht-Karls-University, Heidelberg, Germany.},
+  year = {2008},
+  volume = {3},
+  number = {11},
+  pages = {e3644},
+  url = {http://dx.doi.org/10.1371/journal.pone.0003644},
+  doi = {http://doi.org/10.1371/journal.pone.0003644}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2008" class="entry">
+	<td>von Wegner, F., Ober, T., Weber, C., Schürmann, S., Winter, R., Friedrich, O., Fink, R.H.A. and Vogel, M.</td>
+	<td>Velocity distributions of single F-actin trajectories from a fluorescence image series using trajectory reconstruction and optical flow mapping. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2008','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2008','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>J Biomed Opt<br/>Vol. 13(5), pp. 054018<i>School</i>: University of Heidelberg, Institute of Physiology and Pathophysiology, Medical Biophysics Group, Im Neuenheimer Feld 326, 69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/1.2982525">DOI</a> <a href="http://dx.doi.org/10.1117/1.2982525">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2008" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We present an approach for the computation of single-object velocity statistics in a noisy fluorescence image series. The algorithm is applied to molecular imaging data from an in vitro actin-myosin motility assay. We compare the relative efficiency of wavelet and curvelet transform denoising in terms of noise reduction and object restoration. It is shown that while both algorithms reduce background noise efficiently, curvelet denoising restores the curved edges of actin filaments more reliably. Noncrossing spatiotemporal actin trajectories are unambiguously identified using a novel segmentation scheme that locally combines the information of 2-D and 3-D segmentation. Finally, the optical flow vector field for the image sequence is computed via the 3-D structure tensor and mapped to the segmented trajectories. Using single-trajectory statistics, the global velocity distribution extracted from an image sequence is decomposed into the contributions of individual trajectories. The technique is further used to analyze the distribution of the x and y components of the velocity vectors separately, and it is shown that directed actin motion is found in myosin extracts from single skeletal muscle fibers. The presented approach may prove helpful to identify actin filament subpopulations and to analyze actin-myosin interaction kinetics under biochemical regulation.</td>
+</tr>
+<tr id="bib_Wegner2008" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2008,
+  author = {von Wegner, F. and Tobias Ober and Cornelia Weber and Sebastian Schürmann and René Winter and Oliver Friedrich and Rainer H A Fink and Martin Vogel},
+  title = {Velocity distributions of single F-actin trajectories from a fluorescence image series using trajectory reconstruction and optical flow mapping.},
+  journal = {J Biomed Opt},
+  school = {University of Heidelberg, Institute of Physiology and Pathophysiology, Medical Biophysics Group, Im Neuenheimer Feld 326, 69120 Heidelberg, Germany.},
+  year = {2008},
+  volume = {13},
+  number = {5},
+  pages = {054018},
+  url = {http://dx.doi.org/10.1117/1.2982525},
+  doi = {http://doi.org/10.1117/1.2982525}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2008a" class="entry">
+	<td>von Wegner, F., Koyama, S., Miwa, T. and Friedrich, O.</td>
+	<td>Resting membrane potentials recorded on-site in intact skeletal muscles from deep sea fish (Sigmops gracile) salvaged from depths up to 1.000 m. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2008a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2008a','bibtex')">BibTeX</a>]</p></td>
+	<td>2008</td>
+	<td>Mar Biotechnol (NY)<br/>Vol. 10(4), pp. 478-486<i>School</i>:  Pathophysiology, University of Heidelberg, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s10126-008-9085-x">DOI</a> <a href="http://dx.doi.org/10.1007/s10126-008-9085-x">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2008a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: The effect of elevated ambient pressures in deep sea fish residing at certain bottom depths or even covering different depth levels during migration is poorly understood. Elevated pressures are known to influence membrane properties of various excitable tissues in many species. Reliable results on membrane properties require freshly isolated living cells and short decompression times. During a scientific cruise south of Japan, deep sea fish were sampled from depths up to 1.000 m by using the intelligent operative net sampling system IONESS. On-site electrophysiological recordings of resting membrane potentials were performed in freshly isolated skeletal muscles from Sigmops gracile. Experiments were conducted at various extracellular K+ concentrations to derive relative membrane ion permeabilities and estimate intracellular K+ concentrations [K+]i in the muscles studied. With increasing sampling depth, a tendency for depolarized resting membrane potentials was observed. This could be explained by an increase in relative Na+ over K+ resting membrane permeabilities. Fish samples from deeper sites also had larger [K+]i values compared with shallower sites. This study represents a first approach to perform sophisticated physiological live-cell experiments on board a fully operating ship. These data are expected to more realistically reflect the physiological state of biological preparations residing in the deep sea.</td>
+</tr>
+<tr id="bib_Wegner2008a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2008a,
+  author = {von Wegner, F. and Sumihiro Koyama and Tetsuya Miwa and Oliver Friedrich},
+  title = {Resting membrane potentials recorded on-site in intact skeletal muscles from deep sea fish (Sigmops gracile) salvaged from depths up to 1.000 m.},
+  journal = {Mar Biotechnol (NY)},
+  school = { Pathophysiology, University of Heidelberg, Heidelberg, Germany.},
+  year = {2008},
+  volume = {10},
+  number = {4},
+  pages = {478--486},
+  url = {http://dx.doi.org/10.1007/s10126-008-9085-x},
+  doi = {http://doi.org/10.1007/s10126-008-9085-x}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2007" class="entry">
+	<td>Friedrich*, O., von Wegner, F., Wink, M. and Fink, R.H.A.</td>
+	<td>Na^+- and K^+-channels as molecular targets of the alkaloid ajmaline in skeletal muscle fibres. <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Br J Pharmacol<br/>Vol. 151(1), pp. 82-93<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, University Heidelberg, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1038/sj.bjp.0707194">DOI</a> <a href="http://dx.doi.org/10.1038/sj.bjp.0707194">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Ajmaline is a widely used antiarrhythmic drug. Its action on voltage-gated ion channels in skeletal muscle is not well documented and we have here elucidated its effects on Na(+) and K(+) channels.Sodium (I(Na)) and potassium (I(K)) currents in amphibian skeletal muscle fibres were recorded using 'loose-patch' and two-microelectrode voltage clamp techniques (2-MVC). Action potentials were generated using current clamp.Under 'loose patch' clamp conditions, the IC(50) for I(Na) was 23.2 microM with Hill-coefficient h=1.21. For I(K), IC(50) was 9.2 microM, h=0.87. Clinically relevant ajmaline concentrations (1-3 microM) reduced peak I(Na) by approximately 5&percnt; but outward I(K) values were reduced by approximately 20%. Na(+) channel steady-state activation and fast inactivation were concentration-dependently shifted towards hyperpolarized potentials ( approximately 10 mV at 25 microM). Inactivation curves were markedly flattened by ajmaline. Peak-I(K) under maintained depolarisation was reduced to approximately 30&percnt; of control values by 100 microM ajmaline. I(K) activation time constants were increased at least two-fold. Lower concentrations (10 or 25 microM) reduced steady-state-I(K) slightly but peak-I(K) significantly. Action potential generation threshold was increased by 10 microM ajmaline and repolarisation prolonged.Ajmaline acts differentially on Na(+) and K(+) channels in skeletal muscle. This suggests at least multiple sites of action including the S4 subunit. Our data may provide a first insight into specific mechanisms of ajmaline-ion channel interaction in tissues other than cardiac muscle and could suggest possible side-effects that need to be further evaluated.</td>
+</tr>
+<tr id="bib_Friedrich2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2007,
+  author = {O. Friedrich* and von Wegner, F.* and M. Wink and R. H A Fink},
+  title = {Na^+- and K^+-channels as molecular targets of the alkaloid ajmaline in skeletal muscle fibres.},
+  journal = {Br J Pharmacol},
+  school = {Medical Biophysics, Institute of Physiology and Pathophysiology, University Heidelberg, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de},
+  year = {2007},
+  volume = {151},
+  number = {1},
+  pages = {82--93},
+  url = {http://dx.doi.org/10.1038/sj.bjp.0707194},
+  doi = {http://doi.org/10.1038/sj.bjp.0707194}
+}
+</pre></td>
+</tr>
+<tr id="Voelkers2007" class="entry">
+	<td>Völkers, M., Loughrey, C.M., Macquaide, N., Remppis, A., DeGeorge, B.R., von Wegner, F., Friedrich, O., Fink, R.H.A., Koch, W.J., Smith, G.L. and Most, P.</td>
+	<td>S100A1 decreases calcium spark frequency and alters their spatial characteristics in permeabilized adult ventricular cardiomyocytes. <p class="infolinks">[<a href="javascript:toggleInfo('Voelkers2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Voelkers2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Cell Calcium<br/>Vol. 41(2), pp. 135-143<i>School</i>: Department of Internal Medicine III, Laboratory for Cardiac Stem Cell and Gene Therapy, Division of Cardiology, INF 350, University of Heidelberg, 69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.ceca.2006.06.001">DOI</a> <a href="http://dx.doi.org/10.1016/j.ceca.2006.06.001">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Voelkers2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: S100A1, a Ca2+-sensor protein of the EF-hand type, exerts positive inotropic effects in the heart via enhanced cardiac ryanodine receptor (RyR2) activity. Here we report that S100A1 protein (0.1microM) interacts with the RyR2 in resting permeabilized cardiomyocytes at free Ca2+-levels comparable to diastolic Ca2+-concentrations ( approximately 150nM). Alterations of RyR2 function due to S100A1 binding was assessed via analysis of Ca2+-spark characteristics. Ca2+-spark frequency, amplitude and duration were all reduced upon perfusion with 0.1microM S100A1 protein by 38 14&percnt; and 18 respectively. Most likely, these effects were conveyed through the S100A1 C-terminus (S100A1-ct; amino acids 75-94) as the corresponding S100A1-ct peptide (0.1microM) inhibited S100A1 protein binding to the RyR2 and similarly attenuated frequency, amplitude and duration of Ca2+-sparks by 52 8&percnt; and 26 respectively. Accordingly, the sarcoplasmic reticulum (SR) Ca2+-content was slightly increased but the stoichiometry of other accessory RyR2 modulators (sorcin/FKBP12.6) remained unaltered by S100A1. Hence, we propose S100A1 as a novel inhibitory modulator of RyR2 function at diastolic Ca2+-concentrations in rabbit ventricular cardiomyocytes.</td>
+</tr>
+<tr id="bib_Voelkers2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Voelkers2007,
+  author = {Mirko Völkers and Christopher M Loughrey and Niall Macquaide and Andrew Remppis and Brent R DeGeorge and von Wegner, F. and Oliver Friedrich and Rainer H A Fink and Walter J Koch and Godfrey L Smith and Patrick Most},
+  title = {S100A1 decreases calcium spark frequency and alters their spatial characteristics in permeabilized adult ventricular cardiomyocytes.},
+  journal = {Cell Calcium},
+  school = {Department of Internal Medicine III, Laboratory for Cardiac Stem Cell and Gene Therapy, Division of Cardiology, INF 350, University of Heidelberg, 69120 Heidelberg, Germany.},
+  year = {2007},
+  volume = {41},
+  number = {2},
+  pages = {135--143},
+  url = {http://dx.doi.org/10.1016/j.ceca.2006.06.001},
+  doi = {http://doi.org/10.1016/j.ceca.2006.06.001}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2007" class="entry">
+	<td>von Wegner, F., Both, M., Fink, R.H.A. and Friedrich, O.</td>
+	<td>Fast XYT imaging of elementary calcium release events in muscle with multifocal multiphoton microscopy and wavelet denoising and detection. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2007','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2007','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>IEEE Trans Med Imaging<br/>Vol. 26(7), pp. 925-934<i>School</i>: Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, Heidelberg BW 69120, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1109/TMI.2007.895471">DOI</a> <a href="http://dx.doi.org/10.1109/TMI.2007.895471">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2007" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We used multifocal multiphoton microscopy to image fast, localized elevations of the cytosolic Ca2+ concentration in two spatial dimensions plus time (XYT). This technique extends the common spatially 1-D XT imaging and allows the acquisition of more than ten times longer time series (>500 images) and ten times larger areas of interest than for previously used confocal XYT imaging techniques due to lower phototoxicity and fast multifocal scanning. We recorded spontaneously occurring elementary Ca2+ release events in chemically permeabilized adult mammalian skeletal muscle fibers using two-photon excitation of the fluorescent dye Fluo-4. The resulting time series were analyzed with an automated denoising and detection algorithm based on the à trous implementation of the discrete wavelet transform. Wavelet coefficient hard-thresholding is used for denoising and event detection is performed across several wavelet scales. The spatiotemporal characteristics of the detected Ca2+ release events are followed throughout the XYT stack and are parametrized using a biophysically valid anisotropic Gaussian event model. The proposed method allows a detailed spatiotemporal analysis of elementary Ca2+ release events underlying the excitation-contraction coupling process in muscle.</td>
+</tr>
+<tr id="bib_Wegner2007" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2007,
+  author = {von Wegner, F. and Martin Both and Rainer H A Fink and Oliver Friedrich},
+  title = {Fast XYT imaging of elementary calcium release events in muscle with multifocal multiphoton microscopy and wavelet denoising and detection.},
+  journal = {IEEE Trans Med Imaging},
+  school = {Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, Heidelberg BW 69120, Germany.},
+  year = {2007},
+  volume = {26},
+  number = {7},
+  pages = {925--934},
+  url = {http://dx.doi.org/10.1109/TMI.2007.895471},
+  doi = {http://doi.org/10.1109/TMI.2007.895471}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2007a" class="entry">
+	<td>von Wegner, F., Ober, T., Weber, C., Friedrich, O., Fink, R.H.A. and Vogel, M.</td>
+	<td>Multiresolution transform denoising and segmentation of single molecule motility image series <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2007a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2007a','bibtex')">BibTeX</a>]</p></td>
+	<td>2007</td>
+	<td>Proc SPIE - Molecular Imaging<br/>Vol. 6626, pp. 66260Q&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/12.728371">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Wegner2007a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We present a multiresolution transform-based method for the extraction of moving filament trajectories from single molecule motility data. Noise-corrupted fluorescence image series are denoised using the multiscale median transform and trajectories are detected in the denoised data set. The presented method reduces noise more efficiently than 2D-anisotropic diffusion and several wavelet based techniques. Fibre trajectories are extracted by segmentation of the denoised image stacks and non-crossing trajectories are unambiguously identified combining the information of 2D (XY) and 3D (XYT) segmentation. The algorithm is applied and evaluated using experimental data sets - image sequences of fluorescently labeled F-actin molecules and their 2D-trajectories on a myosin coated surface. This so-called 'motility assay' is used to analyse kinetics, biochemical regulation and pharmacological modulation of these biologically relevant molecules. The presented method improves signal-to-background discrimination, facilitates filament identification and finally, may contribute to significantly improve the performance of this assay.</td>
+</tr>
+<tr id="bib_Wegner2007a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2007a,
+  author = {von Wegner, F. and Tobias Ober and Cornelia Weber and Oliver Friedrich and Rainer H. A. Fink and Martin Vogel},
+  title = {Multiresolution transform denoising and segmentation of single molecule motility image series},
+  journal = {Proc SPIE - Molecular Imaging},
+  year = {2007},
+  volume = {6626},
+  pages = {66260Q},
+  doi = {http://doi.org/10.1117/12.728371}
+}
+</pre></td>
+</tr>
+<tr id="Friedrich2006" class="entry">
+	<td>Friedrich, O., von Wegner, F., Hartmann, M., Frey, B., Sommer, K., Ludwig, H. and Fink, R.H.A.</td>
+	<td>'In situ' high pressure confocal Ca^2^+-fluorescence microscopy in skeletal muscle: a new method to study pressure limits in mammalian cells. <p class="infolinks">[<a href="javascript:toggleInfo('Friedrich2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Friedrich2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Undersea Hyperb Med<br/>Vol. 33(3), pp. 181-195<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, INF 326, Ruprecht-Karls-University, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="abs_Friedrich2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We combined 'in situ' high pressure microscopy with confocal laser scanning microscopy to directly study Ca2+ homeostasis in intact mammalian (murine) skeletal muscle fibres during high pressure exposure up to 35 MPa. Cytosolic Fluo-4 and mitochondrial Rhod-2 Ca2+ fluorescence were simultaneously monitored. To separate changes in Ca2+ and direct/indirect effects of pressure on the dye, experiments in permeabilized ('skinned') muscle fibres were performed at a fixed Ca2+ concentration. Normalized Fluo-4 fluorescence sharply declined up to 10 MPa but showed a plateau between 10 MPa and -35 MPa. In the intact fibre, Fluo-4 fluorescence exponentially decreased during pressurization to 35 MPa with a pressure constant of pi-5 MPa whereas mitochondrial Rhod-2 fluorescence exponentially increased with a four-fold larger pi. Holding the pressure at 35 MPa almost did not change Fluo-4 fluorescence. However, Rhod-2 fluorescence started to decrease after -40 min. Upon decompression, Rhod-2 and Fluo-4 fluorescence increased exponentially with similar pi. However, initial Fluo-4 fluorescence values were not restored. Our results are in agreement with pressure induced Ca2+ leakage from the sarcoplasmic reticulum. Ca2+ might then be taken up in large amounts by mitochondria preventing cytosolic increase in Ca2+. Prolonged pressure applications (-40 min at 35 MPa) seem to destabilize mitochondrial function with release of Ca2+ from mitochondria back into the cytosol and eventually mechanical activation resulting in irreversible contractures. The pressure induced disturbance of Ca2+ homeostasis might have important implications for the pressure exposure limits and/or dive profiles of deep sea mammals.</td>
+</tr>
+<tr id="bib_Friedrich2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Friedrich2006,
+  author = {O. Friedrich and von Wegner, F. and M. Hartmann and B. Frey and K. Sommer and H. Ludwig and R. H A Fink},
+  title = {'In situ' high pressure confocal Ca^2^+-fluorescence microscopy in skeletal muscle: a new method to study pressure limits in mammalian cells.},
+  journal = {Undersea Hyperb Med},
+  school = {Medical Biophysics, Institute of Physiology and Pathophysiology, INF 326, Ruprecht-Karls-University, Heidelberg, Germany.},
+  year = {2006},
+  volume = {33},
+  number = {3},
+  pages = {181--195}
+}
+</pre></td>
+</tr>
+<tr id="Vogel2006" class="entry">
+	<td>Vogel, M., Hahn, D., Schürmann, S., Lang, M., von Wegner, F., Friedrich, O., Engelhardt, J., Hell, S.W. and Fink, R.H.</td>
+	<td>4Pi-SHG imaging of mammalian myofibrillar structures. <p class="infolinks">[<a href="javascript:toggleInfo('Vogel2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Vogel2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Proc SPIE<br/>Vol. 6089, pp. 300-307&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/12.646638">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Vogel2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Intrinsic Second Harmonic Generation (SHG) signals obtained from the motor protein myosin are of particular interest for 3D-imaging of living muscle cells. In addition, the new and powerful tool of 4Pi microscopy allows to markedly enhance the optical resolution of microscopy as well as the sensitivity for small objects because of the high peak intensities due to the interference pattern created in the focus. In the present study, we report, to our knowledge for the first time, measurements of intrinsic SHG signals under 4Pi conditions of type A. These measurements on mammalian myofibrilar structures are combined with very high resolution 4Pi fluorescence data obtained from the same preparations. We have chosen myofibrillar preparations of isolated mammalian muscle fibers as they (i) possess a regular repetitive pattern of actin and myosin filaments within sarcomers 2 to 3 μm in length, (ii) consist of single myofibrils of small total diameter of approximately 1 μm and (iii) are ideally suited to study the biomedically important process of force generation via calcium regulated motor protein interactions. Myofibrillar preparations were obtained from murine skeletal and heart muscle by using a combined chemical and mechanical fractionation1 (Both et al. 2004, JBO 9(5):882-892). BODIPY FL phallacidin has been used to fluorescently label the actin filaments. The experiments were carried out with a Leica SP2 multi photon microscope modified for 4Pi measurements using a Ti:Sa laser tuned to 850-900 nm. SHG as well as fluorescence photons were detected confocally by a counting APD detector. The approach taken our study provides new 3D-data for the analysis and simulation of the important process of excitation-contraction coupling under normal physiological as well as under pathophysiological conditions.</td>
+</tr>
+<tr id="bib_Vogel2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Vogel2006,
+  author = {Martin Vogel and Dorothea Hahn and Sebastian Schürmann and Marion Lang and von Wegner, F. and Oliver Friedrich and Johann Engelhardt and Stefan W. Hell and Rainer H. Fink},
+  title = {4Pi-SHG imaging of mammalian myofibrillar structures.},
+  journal = {Proc SPIE},
+  year = {2006},
+  volume = {6089},
+  pages = {300--307},
+  doi = {http://doi.org/10.1117/12.646638}
+}
+</pre></td>
+</tr>
+<tr id="Vogel2006a" class="entry">
+	<td>Vogel, M., Schürmann, S., Friedrich, O., von Wegner, F., Both, M. and Fink, R.H.</td>
+	<td>Scanning multi photon microscopy of SHG signals from single myofibrils of mammalian skeletal muscle. <p class="infolinks">[<a href="javascript:toggleInfo('Vogel2006a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Vogel2006a','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Proc SPIE<br/>Vol. 6089, pp. 60891J&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/12.646490">DOI</a> &nbsp;</td>
+</tr>
+<tr id="abs_Vogel2006a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We have recently shown that intrinsic, chromophore free Second Harmonic Generation (SHG) signals can be obtained from myofibrillar structures of mammalian skeletal muscle1,2 (Both et al. 2003, Proc. SPIE 5139: 112-120; Both et al. 2004, JBO 9(5):882-892). Here, we report experiments at the level of single myofibrils (diameters 1 to 2 m) to characterize the spatial dependency of the hyperpolarizability chi(2) and to generate a map of this tensor in myofibrillar structures. Myofibrils are the smallest functional sub cellular contractile structures of muscle. They are organized in a regular sarcomer pattern with a periodicity of 2 to 3 m. Single myofibrils were obtained from mammalian skeletal muscle using a combined chemical and mechanical fractionation. The SHG signals were recorded with an inverse laser scanning microscope (Leica SP2). A ps laser source (Ti:Sa laser, Tsunami, Spectra Physics) tuned to 880 nm was used to excite the sample through an objective of high NA (1.2NA, 63x). The laser source was linearly polarized and the axis of polarization could be adjusted in steps of degrees with a half-wave plate. The forward scattered SHG signal was collected with a matching objective placed above the preparation. The SHG signals depend both on polarization and location within the myofibrillar structures. The SHG signals seem to arise from the myosin molecules. In conclusion, SHG imaging allows to monitor the myofibrillar structure with two photon resolution.</td>
+</tr>
+<tr id="bib_Vogel2006a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Vogel2006a,
+  author = {Martin Vogel and Sebastian Schürmann and Oliver Friedrich and von Wegner, F. and Martin Both and Rainer H. Fink},
+  title = {Scanning multi photon microscopy of SHG signals from single myofibrils of mammalian skeletal muscle.},
+  journal = {Proc SPIE},
+  year = {2006},
+  volume = {6089},
+  pages = {60891J},
+  doi = {http://doi.org/10.1117/12.646490}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2006" class="entry">
+	<td>von Wegner, F., Both*, M. and Fink, R.H.A.</td>
+	<td>Automated detection of elementary calcium release events using the &agrave; trous wavelet transform. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2006','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2006','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>Biophys J<br/>Vol. 90(6), pp. 2151-2163<i>School</i>: Institute of Physiology and Pathophysiology, Medical Biophysics, University of Heidelberg, INF 326, D-69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1529/biophysj.105.069930">DOI</a> <a href="http://dx.doi.org/10.1529/biophysj.105.069930">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2006" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We developed an algorithm for the automated detection and analysis of elementary Ca2+ release events (ECRE) based on the two-dimensional nondecimated wavelet transform. The transform is computed with the "à trous" algorithm using the cubic B-spline as the basis function and yields a multiresolution analysis of the image. This transform allows for highly efficient noise reduction while preserving signal amplitudes. ECRE detection is performed at the wavelet levels, thus using the whole spectral information contained in the image. The algorithm was tested on synthetic data at different noise levels as well as on experimental data of ECRE. The noise dependence of the statistical properties of the algorithm (detection sensitivity and reliability) was determined from synthetic data and detection parameters were selected to optimize the detection of experimental ECRE. The wavelet-based method shows considerably higher detection sensitivity and less false-positive counts than previously employed methods. It allows a more efficient detection of elementary Ca2+ release events than conventional methods, in particular in the presence of elevated background noise levels. The subsequent analysis of the morphological parameters of ECRE is reliably reproduced by the analysis procedure that is applied to the median filtered raw data. Testing the algorithm more rigorously showed that event parameter histograms (amplitude, rise time, full duration at half-maximum, and full width at half-maximum) were faithfully extracted from synthetic, "in-focus" and "out-of-focus" line scan sparks. Most importantly, ECRE obtained with laser scanning confocal microscopy of chemically skinned mammalian skeletal muscle fibers could be analyzed automatically to reproducibly establish event parameter histograms. In summary, our method provides a new valuable tool for highly reliable automated detection of ECRE in muscle but can also be adapted to other preparations.</td>
+</tr>
+<tr id="bib_Wegner2006" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2006,
+  author = {von Wegner, F.* and M. Both* and R. H A Fink},
+  title = {Automated detection of elementary calcium release events using the &agrave; trous wavelet transform.},
+  journal = {Biophys J},
+  school = {Institute of Physiology and Pathophysiology, Medical Biophysics, University of Heidelberg, INF 326, D-69120 Heidelberg, Germany.},
+  year = {2006},
+  volume = {90},
+  number = {6},
+  pages = {2151--2163},
+  url = {http://dx.doi.org/10.1529/biophysj.105.069930},
+  doi = {http://doi.org/10.1529/biophysj.105.069930}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2006a" class="entry">
+	<td>von Wegner, F., Both, M., Fink, R.H.A. and Friedrich, O.</td>
+	<td>Elementary Ca^2^+ release events in mammalian skeletal muscle: effects of the anaesthetic drug thiopental. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2006a','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Wegner2006a','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>J Muscle Res Cell Motil<br/>Vol. 27(5-7), pp. 315-326<i>School</i>: Medical Biophysics, Institute for Physiology and Pathophysiology, University of Heidelberg, INF 326, D-69120, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s10974-006-9092-3">DOI</a> <a href="http://dx.doi.org/10.1007/s10974-006-9092-3">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Wegner2006a" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We examined the effect of clinically relevant doses of thiopental (10-100 microM) on Ca2+ release from the sarcoplasmic reticulum of chemically skinned skeletal muscle fibres of the mouse. Elementary Ca2+ release events (ECRE) were recorded with confocal microscopy and were detected and analysed by an automated algorithm. Thiopental at 25 microM evoked a marked increase in ECRE frequency (events/100 microm/s) from 0.64 +/- 0.32 to 1.56 +/- 0.38 (P < 0.001). Incubation with 5 microM ryanodine significantly reduced spontaneous and evoked ECRE frequencies to 0.08 +/- 0.08 (P < 0.001) and 0.39 +/- 0.25 (25 microM thiopental, P < 0.001) respectively. Thiopental-evoked ECRE show different morphological characteristics compared to spontaneous events. Maximum relative amplitudes (DeltaF/F0)max and spatial width (full width at half maximum) of the events were substantially increased. Full duration at half maximum was increased and some very long events (200 ms compared to approximately 30 ms standard) were produced. The rise times as an indicator of the channel open time were slightly increased. Furthermore, the occurrence of repetitive ECRE was observed. These events, in contrast to previous observations in amphibian skeletal muscle fibres, displayed a multitude of different release patterns. In particular, a repetitive ECRE mode with successively decaying amplitudes was identified and the inter-event intervals were analysed. Estimation of the underlying Ca2+ release current suggests that during repetitive events with a decaying amplitude a decreasing amount of Ca2+ was released within the individual release event. Possible underlying mechanisms are discussed. In summary, thiopental seems to be a potent RyR1 agonist and substantially alters the gating mechanisms of RyR Ca2+ release channel clusters already in clinically relevant doses, i.e. doses administered during general anaesthesia.</td>
+</tr>
+<tr id="bib_Wegner2006a" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2006a,
+  author = {von Wegner, F. and M. Both and R. H A Fink and O. Friedrich},
+  title = {Elementary Ca^2^+ release events in mammalian skeletal muscle: effects of the anaesthetic drug thiopental.},
+  journal = {J Muscle Res Cell Motil},
+  school = {Medical Biophysics, Institute for Physiology and Pathophysiology, University of Heidelberg, INF 326, D-69120, Heidelberg, Germany.},
+  year = {2006},
+  volume = {27},
+  number = {5-7},
+  pages = {315--326},
+  url = {http://dx.doi.org/10.1007/s10974-006-9092-3},
+  doi = {http://doi.org/10.1007/s10974-006-9092-3}
+}
+</pre></td>
+</tr>
+<tr id="Wegner2006b" class="entry">
+	<td>von Wegner, F., Both, M., Fink, R. and Friedrich, O.</td>
+	<td>3D high-speed multifocal multiphoton microscopy in muscle and wavelet analysis of fast elementary calcium release events. <p class="infolinks">[<a href="javascript:toggleInfo('Wegner2006b','bibtex')">BibTeX</a>]</p></td>
+	<td>2006</td>
+	<td>IEEE International Symposium on Biomedical Imaging, pp. 1148-1151&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1109/ISBI.2006.1625126">DOI</a> &nbsp;</td>
+</tr>
+<tr id="bib_Wegner2006b" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Wegner2006b,
+  author = {von Wegner, F. and Both, M. and Fink, R.H.A. and Friedrich, O.},
+  title = {3D high-speed multifocal multiphoton microscopy in muscle and wavelet analysis of fast elementary calcium release events.},
+  journal = {IEEE International Symposium on Biomedical Imaging},
+  year = {2006},
+  pages = {1148-1151},
+  doi = {http://doi.org/10.1109/ISBI.2006.1625126}
+}
+</pre></td>
+</tr>
+<tr id="Askoxylakis2005" class="entry">
+	<td>Askoxylakis, V., Zitzmann, S., Mier, W., Graham, K., Kr&auml;mer, S., von Wegner, F., Fink, R.H.A., Schwab, M., Eisenhut, M. and Haberkorn, U.</td>
+	<td>Preclinical evaluation of the breast cancer cell-binding peptide, p160. <p class="infolinks">[<a href="javascript:toggleInfo('Askoxylakis2005','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Askoxylakis2005','bibtex')">BibTeX</a>]</p></td>
+	<td>2005</td>
+	<td>Clin Cancer Res<br/>Vol. 11(18), pp. 6705-6712<i>School</i>: Clinical Cooperation Unit Nuclear Medicine, German Cancer Research Center, University of Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1158/1078-0432.CCR-05-0432">DOI</a> <a href="http://dx.doi.org/10.1158/1078-0432.CCR-05-0432">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Askoxylakis2005" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: Selective delivery of drugs into the target tissue is expected to result in high drug concentrations in the tissue of interest and therefore enhanced drug efficacy. To develop a peptide-based radiopharmaceutical, we investigated the properties of a peptide with affinity for human breast cancer, which has been selected through phage display.The bioactivity of the p160 peptide (VPWMEPAYQRFL) was evaluated in vitro and in vivo. The specific binding to human breast cancer MDA-MB-435 cells was confirmed in competition experiments. Internalization of the peptide was investigated with confocal microscopy. Furthermore, the biodistribution of (131)I-labeled p160 was studied in tumor-bearing mice. In vivo stability was evaluated at different periods after tracer administration using high-performance liquid chromatography analysis.The binding of (125)I-labeled p160 was inhibited up to 95&percnt; by the unlabeled peptide with an IC(50) value of 0.6 micromol/L. In addition, 40&percnt; of the total bound activity was found to be internalized into the human breast cancer cells. Although a rapid degradation was seen, biodistribution studies in nude mice showed a higher uptake in tumor than in most of the organs. Perfusion of the animals caused a reduction of the radioligand accumulation in the healthy tissues, whereas the tumor uptake remained constant. A comparison of [(131)I]p160 with a (131)I-labeled Arg-Gly-Asp peptide revealed a higher tumor-to-organ ratio for [(131)I]p160.p160 has properties that make it an attractive carrier for tumor imaging and the intracellular delivery of isotopes or chemotherapeutic drugs.</td>
+</tr>
+<tr id="bib_Askoxylakis2005" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Askoxylakis2005,
+  author = {Vasileios Askoxylakis and Sabine Zitzmann and Walter Mier and Keith Graham and Susanne Kr&auml;mer and von Wegner, F. and Rainer H A Fink and Manfred Schwab and Michael Eisenhut and Uwe Haberkorn},
+  title = {Preclinical evaluation of the breast cancer cell-binding peptide, p160.},
+  journal = {Clin Cancer Res},
+  school = {Clinical Cooperation Unit Nuclear Medicine, German Cancer Research Center, University of Heidelberg, Germany.},
+  year = {2005},
+  volume = {11},
+  number = {18},
+  pages = {6705--6712},
+  url = {http://dx.doi.org/10.1158/1078-0432.CCR-05-0432},
+  doi = {http://doi.org/10.1158/1078-0432.CCR-05-0432}
+}
+</pre></td>
+</tr>
+<tr id="Both2004" class="entry">
+	<td>Both, M., Vogel, M., Friedrich, O., von Wegner, F., Künsting, T., Fink, R.H.A. and Uttenweiler, D.</td>
+	<td>Second harmonic imaging of intrinsic signals in muscle fibers in situ. <p class="infolinks">[<a href="javascript:toggleInfo('Both2004','abstract')">Abstract</a>] [<a href="javascript:toggleInfo('Both2004','bibtex')">BibTeX</a>]</p></td>
+	<td>2004</td>
+	<td>J Biomed Opt<br/>Vol. 9(5), pp. 882-892<i>School</i>: Ruprecht-Karls-Universitat, Institut fur Physiologie und Pathophysiologie, Medical Biophysics Unit, Im Neuenheimer Feld 326, D-69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/1.1783354">DOI</a> <a href="http://dx.doi.org/10.1117/1.1783354">URL</a>&nbsp;</td>
+</tr>
+<tr id="abs_Both2004" class="abstract noshow">
+	<td colspan="6"><b>Abstract</b>: We use second harmonic generation (SHG) imaging to study and quantify a strong intrinsic SHG signal in skeletal muscle fiber preparations and single isolated myofibrils. The intrinsic signal follows the striation pattern of the muscle cells and is positioned at the sarcomeric location of the myosin filaments. Interestingly, the signal is enhanced at the region where the myosin heads are located on the myosin filaments. As the intrinsic signal reflects the subcellular structure in an accurate way, SHG can be used for noninvasive high resolution structural imaging without exogenous labels in living muscle cells. This may be very important for detecting changes in myofibrillar organization occurring under pathophysiological conditions, e.g., in cardiac and skeletal myopathies. Due to the strong dependency of SHG on orientation and symmetries of the tissue, it may allow the study of dynamic interactions between the contractile proteins actin and myosin during force production and muscle shortening. Furthermore, SHG imaging can be combined with other nonlinear microscopical techniques, such as laser scanning multiphoton fluorescence microscopy, to simultaneously measure other dynamic cellular processes, representing a complementary method and extending the range of nonlinear microscopical methods.</td>
+</tr>
+<tr id="bib_Both2004" class="bibtex noshow">
+<td colspan="6"><b>BibTeX</b>:
+<pre>
+@article{Both2004,
+  author = {Martin Both and Martin Vogel and Oliver Friedrich and von Wegner, F. and Thomas Künsting and Rainer H A Fink and Dietmar Uttenweiler},
+  title = {Second harmonic imaging of intrinsic signals in muscle fibers in situ.},
+  journal = {J Biomed Opt},
+  school = {Ruprecht-Karls-Universitat, Institut fur Physiologie und Pathophysiologie, Medical Biophysics Unit, Im Neuenheimer Feld 326, D-69120 Heidelberg, Germany.},
+  year = {2004},
+  volume = {9},
+  number = {5},
+  pages = {882--892},
+  url = {http://dx.doi.org/10.1117/1.1783354},
+  doi = {http://doi.org/10.1117/1.1783354}
+}
+</pre></td>
+</tr>
+</tbody>
+</table>
+<footer>
+ <small>Created by <a href="http://jabref.sourceforge.net">JabRef</a> on 20/05/2021.</small>
+</footer>
+<!-- file generated by JabRef -->
+</body>
+</html>
