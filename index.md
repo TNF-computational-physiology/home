@@ -33,7 +33,7 @@ Visit the homepage of the [Translational Neuroscience Facility](https://medicals
 
 
 # Publications
-[![publications](pubs_200px.png)](publications_table.html)
+[![publications](pubs_80px.png)](publications_table.html)
 
 
 # News
