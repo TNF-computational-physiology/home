@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "**_Submit!_** Methods and Applications Fractal Physiology"
+title: "Methods and Applications Fractal Physiology"
 categories: misc
 ---
 
