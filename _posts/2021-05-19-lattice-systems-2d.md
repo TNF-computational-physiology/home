@@ -18,3 +18,9 @@ They can be used to study travelling waves, e.g. spiral waves.
 5. Izhikevich neuronal models
   - [github repo](https://github.com/Frederic-vW/izhikevich-2d)
   - [page](https://frederic-vw.github.io/izhikevich-2d)
+6. Stuart-Landau oscillator model
+  - [github repo](https://github.com/Frederic-vW/csle-2d)
+  - [page](https://frederic-vw.github.io/csle-2d)
+7. Kuramoto oscillator model
+  - [github repo](https://github.com/Frederic-vW/kuramoto-2d)
+  - [page](https://frederic-vw.github.io/kuramoto-2d)
