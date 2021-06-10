@@ -27,10 +27,11 @@ Visit the homepage of the [Translational Neuroscience Facility](https://medicals
 3. [Hodgkin-Huxley 2D model](https://github.com/Frederic-vW/hodgkin-huxley-2d)
 4. [Morris-Lecar 2D model](https://github.com/Frederic-vW/morris-lecar-2d)
 5. [FitzHugh-Nagumo 2D model](https://github.com/Frederic-vW/fitzhugh-nagumo-2d)
-6. [IzhikevichH 2D model](https://github.com/Frederic-vW/izhikevich-2d)
-7. [Stuart-Landau oscillator 2D model](https://github.com/Frederic-vW/csle-2d)
-8. [Kuramoto oscillator 2D model](https://github.com/Frederic-vW/kuramoto-2d)
-9. [Respiratory waveform analysis](https://github.com/Frederic-vW/picsdb)
+6. [Hindmarsh-Rose 2D model](https://github.com/Frederic-vW/hindmarsh-rose-2d)
+7. [IzhikevichH 2D model](https://github.com/Frederic-vW/izhikevich-2d)
+8. [Stuart-Landau oscillator 2D model](https://github.com/Frederic-vW/csle-2d)
+9. [Kuramoto oscillator 2D model](https://github.com/Frederic-vW/kuramoto-2d)
+10. [Respiratory waveform analysis](https://github.com/Frederic-vW/picsdb)
 
 
 # Publications
