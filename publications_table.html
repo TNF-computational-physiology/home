@@ -1,0 +1,816 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>JabRef references</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script type="text/javascript">
+<!--
+// QuickSearch script for JabRef HTML export (no Abstract/BibTeX)
+// Version: 3.0
+//
+// Copyright (c) 2006-2011, Mark Schenk
+//
+// This software is distributed under a Creative Commons Attribution 3.0 License
+// http://creativecommons.org/licenses/by/3.0/
+//
+// Features:
+// - intuitive find-as-you-type searching
+//    ~ case insensitive
+//    ~ ignore diacritics (optional)
+//
+// - search with/without Regular Expressions
+// - match BibTeX key
+//
+
+// Search settings
+var noSquiggles = true; 	// ignore diacritics when searching
+var searchRegExp = false; 	// enable RegExp searches
+
+
+if (window.addEventListener) {
+	window.addEventListener("load",initSearch,false); }
+else if (window.attachEvent) {
+	window.attachEvent("onload", initSearch); }
+
+function initSearch() {
+	// check for quick search table and searchfield
+	if (!document.getElementById('qs_table')||!document.getElementById('quicksearch')) { return; }
+
+	// load all the rows and sort into arrays
+	loadTableData();
+	
+	//find the query field
+	qsfield = document.getElementById('qs_field');
+
+	// previous search term; used for speed optimisation
+	prevSearch = '';
+
+	//find statistics location
+	stats = document.getElementById('stat');
+	setStatistics(-1);
+	
+	// set up preferences
+	initPreferences();
+
+	// shows the searchfield
+	document.getElementById('quicksearch').style.display = 'block';
+	document.getElementById('qs_field').onkeyup = quickSearch;
+}
+
+function loadTableData() {
+	// find table and appropriate rows
+	searchTable = document.getElementById('qs_table');
+	var allRows = searchTable.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+	// split all rows into entryRows and infoRows (e.g. abstract, review, bibtex)
+	entryRows = new Array();
+
+	// get data from each row
+	entryRowsData = new Array();
+	
+	BibTeXKeys = new Array();
+	
+	for (var i=0, k=0, j=0; i<allRows.length;i++) {
+		if (allRows[i].className.match(/entry/)) {
+			entryRows[j] = allRows[i];
+			entryRowsData[j] = stripDiacritics(getTextContent(allRows[i]));
+			allRows[i].id ? BibTeXKeys[j] = allRows[i].id : allRows[i].id = 'autokey_'+j;
+			j ++;
+		}
+	}
+	//number of entries and rows
+	numEntries = entryRows.length;
+}
+
+function quickSearch(){
+	
+	tInput = qsfield;
+
+	if (tInput.value.length == 0) {
+		showAll();
+		setStatistics(-1);
+		qsfield.className = '';
+		return;
+	} else {
+		t = stripDiacritics(tInput.value);
+
+		if(!searchRegExp) { t = escapeRegExp(t); }
+			
+		// only search for valid RegExp
+		try {
+			textRegExp = new RegExp(t,"i");
+			qsfield.className = '';
+		}
+			catch(err) {
+			prevSearch = tInput.value;
+			qsfield.className = 'invalidsearch';
+			return;
+		}
+	}
+	
+	// count number of hits
+	var hits = 0;
+
+	// start looping through all entry rows
+	for (var i = 0; cRow = entryRows[i]; i++){
+
+		// only show search the cells if it isn't already hidden OR if the search term is getting shorter, then search all
+		if(cRow.className.indexOf('noshow')==-1 || tInput.value.length <= prevSearch.length){
+			var found = false; 
+
+			if (entryRowsData[i].search(textRegExp) != -1 || BibTeXKeys[i].search(textRegExp) != -1){ 
+				found = true;
+			}
+			
+			if (found){
+				cRow.className = 'entry show';
+				hits++;
+			} else {
+				cRow.className = 'entry noshow';
+			}
+		}
+	}
+
+	// update statistics
+	setStatistics(hits)
+	
+	// set previous search value
+	prevSearch = tInput.value;
+}
+
+
+// Strip Diacritics from text
+// http://stackoverflow.com/questions/990904/javascript-remove-accents-in-strings
+
+// String containing replacement characters for stripping accents 
+var stripstring = 
+    'AAAAAAACEEEEIIII'+
+    'DNOOOOO.OUUUUY..'+
+    'aaaaaaaceeeeiiii'+
+    'dnooooo.ouuuuy.y'+
+    'AaAaAaCcCcCcCcDd'+
+    'DdEeEeEeEeEeGgGg'+
+    'GgGgHhHhIiIiIiIi'+
+    'IiIiJjKkkLlLlLlL'+
+    'lJlNnNnNnnNnOoOo'+
+    'OoOoRrRrRrSsSsSs'+
+    'SsTtTtTtUuUuUuUu'+
+    'UuUuWwYyYZzZzZz.';
+
+function stripDiacritics(str){
+
+    if(noSquiggles==false){
+        return str;
+    }
+
+    var answer='';
+    for(var i=0;i<str.length;i++){
+        var ch=str[i];
+        var chindex=ch.charCodeAt(0)-192;   // Index of character code in the strip string
+        if(chindex>=0 && chindex<stripstring.length){
+            // Character is within our table, so we can strip the accent...
+            var outch=stripstring.charAt(chindex);
+            // ...unless it was shown as a '.'
+            if(outch!='.')ch=outch;
+        }
+        answer+=ch;
+    }
+    return answer;
+}
+
+// http://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
+// NOTE: must escape every \ in the export code because of the JabRef Export...
+function escapeRegExp(str) {
+  return str.replace(/[-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+}
+
+function setStatistics (hits) {
+	if(hits < 0) { hits=numEntries; }
+	if(stats) { stats.firstChild.data = hits + '/' + numEntries}
+}
+
+function getTextContent(node) {
+	// Function written by Arve Bersvendsen
+	// http://www.virtuelvis.com
+	
+	if (node.nodeType == 3) {
+	return node.nodeValue;
+	} // text node
+	if (node.nodeType == 1 && node.className != "infolinks") { // element node
+	var text = [];
+	for (var chld = node.firstChild;chld;chld=chld.nextSibling) {
+		text.push(getTextContent(chld));
+	}
+	return text.join("");
+	} return ""; // some other node, won't contain text nodes.
+}
+
+function showAll(){
+	for (var i = 0; i < numEntries; i++){ entryRows[i].className = 'entry show'; }
+}
+
+function clearQS() {
+	qsfield.value = '';
+	showAll();
+}
+
+function redoQS(){
+	showAll();
+	quickSearch(qsfield);
+}
+
+function updateSetting(obj){
+	var option = obj.id;
+	var checked = obj.value;
+
+	switch(option)
+	 {
+	 case "opt_useRegExp":
+	   searchRegExp=!searchRegExp;
+	   redoQS();
+	   break;
+	 case "opt_noAccents":
+	   noSquiggles=!noSquiggles;
+	   loadTableData();
+	   redoQS();
+	   break;
+	 }
+}
+
+function initPreferences(){
+	if(noSquiggles){document.getElementById("opt_noAccents").checked = true;}
+	if(searchRegExp){document.getElementById("opt_useRegExp").checked = true;}
+}
+
+function toggleSettings(){
+	var togglebutton = document.getElementById('showsettings');
+	var settings = document.getElementById('settings');
+	
+	if(settings.className == "hidden"){
+		settings.className = "show";
+		togglebutton.innerText = "close settings";
+		togglebutton.textContent = "close settings";
+	}else{
+		settings.className = "hidden";
+		togglebutton.innerText = "settings...";		
+		togglebutton.textContent = "settings...";
+	}
+}
+
+-->
+</script>
+<style type="text/css">
+body { background-color: white; font-family: Arial, sans-serif; font-size: 13px; line-height: 1.2; padding: 1em; color: #2E2E2E; margin: auto 2em; }
+
+form#quicksearch { width: auto; border-style: solid; border-color: gray; border-width: 1px 0px; padding: 0.7em 0.5em; display:none; position:relative; }
+span#searchstat {padding-left: 1em;}
+
+div#settings { margin-top:0.7em; /* border-bottom: 1px transparent solid; background-color: #efefef; border: 1px grey solid; */ }
+div#settings ul {margin: 0; padding: 0; }
+div#settings li {margin: 0; padding: 0 1em 0 0; display: inline; list-style: none; }
+div#settings li + li { border-left: 2px #efefef solid; padding-left: 0.5em;}
+div#settings input { margin-bottom: 0px;}
+
+div#settings.hidden {display:none;}
+
+#showsettings { border: 1px grey solid; padding: 0 0.5em; float:right; line-height: 1.6em; text-align: right; }
+#showsettings:hover { cursor: pointer; }
+
+.invalidsearch { background-color: red; }
+input[type="button"] { background-color: #efefef; border: 1px #2E2E2E solid;}
+
+table { width: 100%; empty-cells: show; border-spacing: 0em 0.2em; margin: 1em 0em; border-style: none; }
+th, td { border: 1px gray solid; border-width: 1px 1px; padding: 0.5em; vertical-align: top; text-align: left; }
+th { background-color: #efefef; }
+td + td, th + th { border-left: none; }
+
+td a { color: navy; text-decoration: none; }
+td a:hover  { text-decoration: underline; }
+
+tr.noshow { display: none;}
+tr.highlight td { background-color: #EFEFEF; border-top: 2px #2E2E2E solid; font-weight: bold; }
+tr.abstract td, tr.review td, tr.bibtex td { background-color: #EFEFEF; text-align: justify; border-bottom: 2px #2E2E2E solid; }
+tr.nextshow td { border-bottom: 1px gray solid; }
+
+tr.bibtex pre { width: 100%; overflow: auto; white-space: pre-wrap;}
+p.infolinks { margin: 0.3em 0em 0em 0em; padding: 0px; }
+
+@media print {
+	p.infolinks, #qs_settings, #quicksearch, t.bibtex { display: none !important; }
+	tr { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<form action="" id="quicksearch">
+<input type="text" id="qs_field" autocomplete="off" placeholder="Type to search..." /> <input type="button" onclick="clearQS()" value="clear" />
+<span id="searchstat">Matching entries: <span id="stat">0</span></span>
+<div id="showsettings" onclick="toggleSettings()">settings...</div>
+<div id="settings" class="hidden">
+<ul>
+<li><input type="checkbox" class="search_setting" id="opt_useRegExp" onchange="updateSetting(this)"><label for="opt_useRegExp"> use RegExp</label></li>
+<li><input type="checkbox" class="search_setting" id="opt_noAccents" onchange="updateSetting(this)"><label for="opt_noAccents"> ignore accents</label></li>
+</ul>
+</div>
+</form>
+<table id="qs_table" border="1">
+<thead><tr><th width="20%">Author</th><th width="30%">Title</th><th width="5%">Year</th><th width="30%">Journal/Proceedings</th><th width="10%">Reftype</th><th width="5%">DOI/URL</th></tr></thead>
+<tbody><tr id="Chen2021" class="entry">
+	<td>Chen, F., Zhou, Y., Zhu, Y., Zhu, R., Guan, P., Fan, J., Zhou, L., Valanoor, N., von Wegner, F., Saribatir, E., Birznieks, I., Wan, T. and Chu, D.</td>
+	<td>Recent progress in artificial synaptic devices: materials, processing and applications</td>
+	<td>2021</td>
+	<td>J. Mater. Chem. C&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1039/D1TC01211H">DOI</a> <a href="http://dx.doi.org/10.1039/D1TC01211H">URL</a>&nbsp;</td>
+</tr>
+<tr id="Jia2021" class="entry">
+	<td>Jia, W., von Wegner, F., Zhao, M. and Zeng, Y.</td>
+	<td>Network oscillations imply the highest cognitive workload and lowest cognitive control during idea generation in open-ended creation tasks.</td>
+	<td>2021</td>
+	<td>Scientific Reports<br/>Vol. 11, pp. 24277&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1038/s41598-021-03577-1">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2021" class="entry">
+	<td>von Wegner, F., Bauer, S., Rosenow, F., Triesch, J. and Laufs, H.</td>
+	<td>EEG microstate periodicity explained by rotating phase patterns of resting-state alpha oscillations.</td>
+	<td>2021</td>
+	<td>NeuroImage<br/>Vol. 224, pp. 117372&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2020.117372">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wieder2020" class="entry">
+	<td>Wieder, N., Fink, R. and von Wegner, F.</td>
+	<td>Simulation strategies for calcium microdomains and calcium noise.</td>
+	<td>2020</td>
+	<td>Adv Exp Med Biol<br/>Vol. 1131, pp. 771-797&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/978-3-030-12457-1_31">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Knaut2019" class="entry">
+	<td>Knaut, P., von Wegner, F., Morzelewski, A. and Laufs, H.</td>
+	<td>EEG-correlated fMRI of human alpha (de-)synchronization.</td>
+	<td>2019</td>
+	<td>Clin Neurophysiol<br/>Vol. 130(8), pp. 1375-1386&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.clinph.2019.04.715">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Gamboa2018" class="entry">
+	<td>Gamboa, O.L., Yuen, S.L.K., von Wegner, F., Behrens, M. and Steinmetz, H.</td>
+	<td>The challenge of forgetting: Neurobiological mechanisms of auditory directed forgetting.</td>
+	<td>2018</td>
+	<td>Human Brain Mapping<br/>Vol. 39(1), pp. 249-263&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1002/hbm.23840">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2018" class="entry">
+	<td>von Wegner, F., Laufs, H. and Tagliazucchi, E.</td>
+	<td>Mutual information identifies spurious Hurst phenomena in resting state EEG and fMRI data.</td>
+	<td>2018</td>
+	<td>Phys Rev E<br/>Vol. 97(2-1), pp. 022415&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1103/PhysRevE.97.022415">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2018a" class="entry">
+	<td>von Wegner, F. and Laufs, H.</td>
+	<td>Information-Theoretical Analysis of EEG Microstate Sequences in Python.</td>
+	<td>2018</td>
+	<td>Front Neuroinform<br/>Vol. 12, pp. 30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fninf.2018.00030">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2018b" class="entry">
+	<td>von Wegner, F., Knaut, P. and Laufs, H.</td>
+	<td>EEG microstate sequences from different clustering algorithms are information-theoretically invariant.</td>
+	<td>2018</td>
+	<td>Front Comp Neurosci<br/>Vol. 12, pp. 30&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fncom.2018.00070">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2018c" class="entry">
+	<td>von Wegner, F.</td>
+	<td>Partial autoinformation to characterize symbolic sequences.</td>
+	<td>2018</td>
+	<td>Front Physiol<br/>Vol. 9, pp. 1382&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fphys.2018.01382">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Bauer2017" class="entry">
+	<td>Bauer, S., van Alphen, N., Becker, A., Chiocchetti, A., Deichmann, R., Deller, T., Freiman, T., Freitag, C.M., Gehrig, J., Hermsen, A.M., Jedlicka, P., Kell, C., Klein, K.M., Knake, S., Kullmann, D.M., Liebner, S., Norwood, B.A., Omigie, D., Plate, K., Reif, A., Reif, P.S., Reiss, Y., Roeper, J., Ronellenfitsch, M.W., Schorge, S., Schratt, G., Schwarzacher, S.W., Steinbach, J.P., Strzelczyk, A., Triesch, J., Wagner, M., Walker, M.C., von Wegner, F. and Rosenow, F.</td>
+	<td>Personalized translational epilepsy research - Novel approaches and future perspectives: Part II: Experimental and translational approaches.</td>
+	<td>2017</td>
+	<td>Epilepsy Behav<br/>Vol. 76, pp. 7-12&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.yebeh.2017.06.040">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Gamboa2017" class="entry">
+	<td>Gamboa, O.L., Garcia-Campayo, J., Müller, T. and von Wegner, F.</td>
+	<td>Suppress to Forget: The Effect of a Mindfulness-Based Strategy during an Emotional Item-Directed Forgetting Paradigm.</td>
+	<td>2017</td>
+	<td>Front Psychol<br/>Vol. 8, pp. 432&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fpsyg.2017.00432">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Rosenow2017" class="entry">
+	<td>Rosenow, F., van Alphen, N., Becker, A., Chiocchetti, A., Deichmann, R., Deller, T., Freiman, T., Freitag, C.M., Gehrig, J., Hermsen, A.M., Jedlicka, P., Kell, C., Klein, K.M., Knake, S., Kullmann, D.M., Liebner, S., Norwood, B.A., Omigie, D., Plate, K., Reif, A., Reif, P.S., Reiss, Y., Roeper, J., Ronellenfitsch, M.W., Schorge, S., Schratt, G., Schwarzacher, S.W., Steinbach, J.P., Strzelczyk, A., Triesch, J., Wagner, M., Walker, M.C., von Wegner, F. and Bauer, S.</td>
+	<td>Personalized translational epilepsy research - Novel approaches and future perspectives: Part I: Clinical and network analysis approaches.</td>
+	<td>2017</td>
+	<td>Epilepsy Behav<br/>Vol. 76, pp. 13-18&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.yebeh.2017.06.041">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2017" class="entry">
+	<td>von Wegner, F., Tagliazucchi, E. and Laufs, H.</td>
+	<td>Information-theoretical analysis of resting state EEG microstate sequences - non-Markovianity, non-stationarity and periodicities.</td>
+	<td>2017</td>
+	<td>NeuroImage<br/>Vol. 158, pp. 99-111&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2017.06.062">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Arnold2016" class="entry">
+	<td>Arnold, C., Gispert, S., Bonig, H., von Wegner, F., Somasundaram, S. and Kell, C.A.</td>
+	<td>Dopaminergic Modulation of Cognitive Preparation for Overt Reading: Evidence from the Study of Genetic Polymorphisms.</td>
+	<td>2016</td>
+	<td>Cereb Cortex<br/>Vol. 26(4), pp. 1539-1557<i>School</i>: Cognitive Neuroscience Group, Brain Imaging Center Department of Neurology.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1093/cercor/bhu330">DOI</a> <a href="http://dx.doi.org/10.1093/cercor/bhu330">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2016" class="entry">
+	<td>von Wegner, F., Tagliazucchi, E., Brodbeck, V. and Laufs, H.</td>
+	<td>Analytical and empirical fluctuation functions of the EEG microstate random walk - Short-range vs. long-range correlations.</td>
+	<td>2016</td>
+	<td>NeuroImage<br/>Vol. 141, pp. 442-451&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2016.07.050">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Bolesch2015" class="entry">
+	<td>Bolesch, S., von Wegner, F., Senft, C. and Lorenz, M.W.</td>
+	<td>Transcranial Ultrasound to Detect Elevated Intracranial Pressure: Comparison of Septum Pellucidum Undulations and Optic Nerve Sheath Diameter.</td>
+	<td>2015</td>
+	<td>Ultrasound Med Biol<br/>Vol. 41(5), pp. 1233-1240<i>School</i>: Department of Neurology, University Hospital Frankfurt, Frankfurt am Main, Germany. Electronic address: matthias.lorenz@em.uni-frankfurt.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.ultrasmedbio.2014.12.023">DOI</a> <a href="http://dx.doi.org/10.1016/j.ultrasmedbio.2014.12.023">URL</a>&nbsp;</td>
+</tr>
+<tr id="Kuhn2015" class="entry">
+	<td>Kuhn, A., Brodbeck, V., Tagliazucchi, E., Morzelewski, A., von Wegner F. and Laufs, H.</td>
+	<td>Narcoleptic Patients Show Fragmented EEG-Microstructure During Early NREM Sleep.</td>
+	<td>2015</td>
+	<td>Brain Topogr<br/>Vol. 28(4), pp. 619-635<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University, Frankfurt am Main, Germany, alena@kuhnnetz.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s10548-014-0387-1">DOI</a> <a href="http://dx.doi.org/10.1007/s10548-014-0387-1">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wieder2015" class="entry">
+	<td>Wieder, N., Fink, R.H.A. and von Wegner, F.</td>
+	<td>Exact stochastic simulation of a calcium microdomain reveals the impact of Ca^2+ fluctuations on IP3R gating.</td>
+	<td>2015</td>
+	<td>Biophys J<br/>Vol. 108(3), pp. 557-567&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.bpj.2014.11.3458">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Friedrich2014" class="entry">
+	<td>Friedrich, O., Yi, B., Edwards, J.N., Reischl, B., Wirth-H&uuml;cking, A., Buttgereit, A., Lang, R., Weber, C., Polyak, F., Liu, I., von Wegner Frederic, Cully, T.R., Lee, A., Most, P. and V&ouml;lkers, M.</td>
+	<td>Interleukin-1&alpha; Reversibly Inhibits Skeletal Muscle Ryanodine Receptor: A Novel Mechanism for Critical Illness Myopathy?</td>
+	<td>2014</td>
+	<td>Am J Respir Cell Mol Biol<br/>Vol. 50(6), pp. 1096-1106<i>School</i>: FAU Erlangen-Nuremberg, Institute of Medical Biotechnology, Erlangen, Germany ; oliver.friedrich@mbt.uni-erlangen.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1165/rcmb.2013-0059OC">DOI</a> <a href="http://dx.doi.org/10.1165/rcmb.2013-0059OC">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2014b" class="entry">
+	<td>von Wegner, F., Wieder, N. and Fink, R.H.A.</td>
+	<td>Microdomain calcium fluctuations as a colored noise process.</td>
+	<td>2014</td>
+	<td>Front Genet<br/>Vol. 5, pp. 376&nbsp;</td>
+	<td>article</td>
+	<td><a href="doi: 10.3389/fgene.2014.00376">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Gamboa2013" class="entry">
+	<td>Gamboa, O.L., Tagliazucchi, E., von Wegner F., Jurcoane, A., Wahl, M., Laufs, H. and Ziemann, U.</td>
+	<td>Working memory performance of early MS patients correlates inversely with modularity increases in resting state functional connectivity networks.</td>
+	<td>2013</td>
+	<td>NeuroImage<br/>Vol. 94, pp. 385-395<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany; Department of Neurology and Stroke, Hertie Institute for Clinical Brain Research, Eberhard-Karls-University, Hoppe-Seyler-Str. 3, 72076 Tübingen, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2013.12.008">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2013.12.008">URL</a>&nbsp;</td>
+</tr>
+<tr id="Tagliazucchi2013" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Brodbeck, V., Jahnke, K. and Laufs, H.</td>
+	<td>Breakdown of long-range temporal dependence in default mode and attention networks during deep sleep.</td>
+	<td>2013</td>
+	<td>Proc Natl Acad Sci U S A<br/>Vol. 110(38), pp. 15419-15424<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University, 60528 Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1073/pnas.1312848110">DOI</a> <a href="http://dx.doi.org/10.1073/pnas.1312848110">URL</a>&nbsp;</td>
+</tr>
+<tr id="Tagliazucchi2013a" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Brodbeck, V., Borisov, S., Jahnke, K. and Laufs, H.</td>
+	<td>Large-scale brain functional modularity is reflected in slow electroencephalographic rhythms across the human non-rapid eye movement sleep cycle.</td>
+	<td>2013</td>
+	<td>NeuroImage<br/>Vol. 70, pp. 327-339<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany. tagliazucchi.enzo@googlemail.com&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2012.12.073">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2012.12.073">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2013" class="entry">
+	<td>von Wegner, F. and Laufs, H.</td>
+	<td>Neuroimaging of wakefulness</td>
+	<td>2013</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td><a href="http://doi.org/10.1017/CBO9781139088268.013">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Brodbeck2012" class="entry">
+	<td>Brodbeck, V., Kuhn, A., von Wegner, F., Morzelewski, A., Tagliazucchi, E., Borisov, S., Michel, C.M. and Laufs, H.</td>
+	<td>EEG microstates of wakefulness and NREM sleep.</td>
+	<td>2012</td>
+	<td>NeuroImage<br/>Vol. 62(3), pp. 2129-2139<i>School</i>: Brain Imaging Center, Department of Neurology, University of Frankfurt, a.M., Germany. verena.brodbeck@kgu.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2012.05.060">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2012.05.060">URL</a>&nbsp;</td>
+</tr>
+<tr id="Jahnke2012" class="entry">
+	<td>Jahnke, K., von Wegner, F., Morzelewski, A., Borisov, S., Maischein, M., Steinmetz, H. and Laufs, H.</td>
+	<td>To wake or not to wake? The two-sided nature of the human K-complex.</td>
+	<td>2012</td>
+	<td>NeuroImage<br/>Vol. 59(2), pp. 1631-1638<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, 60528 Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2011.09.013">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2011.09.013">URL</a>&nbsp;</td>
+</tr>
+<tr id="Tagliazucchi2012" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Brodbeck, V. and Laufs, H.</td>
+	<td>Dynamic BOLD functional connectivity in humans and its electrophysiological correlates.</td>
+	<td>2012</td>
+	<td>Front Hum Neurosci<br/>Vol. 6, pp. 339<i>School</i>: Neurology Department and Brain Imaging Center, Goethe University Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.3389/fnhum.2012.00339">DOI</a> <a href="http://dx.doi.org/10.3389/fnhum.2012.00339">URL</a>&nbsp;</td>
+</tr>
+<tr id="Tagliazucchi2012a" class="entry">
+	<td>Tagliazucchi, E., von Wegner, F., Morzelewski, A., Borisov, S., Jahnke, K. and Laufs, H.</td>
+	<td>Automatic sleep staging using fMRI functional connectivity data.</td>
+	<td>2012</td>
+	<td>NeuroImage<br/>Vol. 63(1), pp. 63-72<i>School</i>: Department of Neurology and Brain Imaging Center, Goethe University Frankfurt am Main, Germ. tagliazucchi.enzo@googlemail.com&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2012.06.036">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2012.06.036">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2012" class="entry">
+	<td>von Wegner, F., Wieder, N. and Fink, R.H.A.</td>
+	<td>Simulation strategies for calcium microdomains and calcium-regulated calcium channels.</td>
+	<td>2012</td>
+	<td>Adv Exp Med Biol<br/>Vol. 740, pp. 553-567<i>School</i>: Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/978-94-007-2888-2_25">DOI</a> <a href="http://dx.doi.org/10.1007/978-94-007-2888-2_25">URL</a>&nbsp;</td>
+</tr>
+<tr id="Baudrexel2011" class="entry">
+	<td>Baudrexel, S., Witte, T., Seifried, C., von Wegner, F., Beissner, F., Klein, J.C., Steinmetz, H., Deichmann, R., Roeper, J. and Hilker, R.</td>
+	<td>Resting state fMRI reveals increased subthalamic nucleus-motor cortex connectivity in Parkinson's disease.</td>
+	<td>2011</td>
+	<td>Neuroimage<br/>Vol. 55(4), pp. 1728-1738<i>School</i>: Department of Neurology, University Hospital, Goethe University Frankfurt am Main, Schleusenweg 2-16, D-60528 Frankfurt am Main, Germany; Brain Imaging Center, Goethe University Frankfurt am Main, Schleusenweg 2-16, D-60528 Frankfurt am Main, Germany; Department of Neurophysiology, Interdisciplinary Center for Neuroscience Frankfurt, Heinrich-Hoffmann-Str. 7, 60528 Frankfurt am Main, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.neuroimage.2011.01.017">DOI</a> <a href="http://dx.doi.org/10.1016/j.neuroimage.2011.01.017">URL</a>&nbsp;</td>
+</tr>
+<tr id="Voelkers2011" class="entry">
+	<td>Völkers, M., Weidenhammer, C., Herzog, N., Qiu, G., Spaich, K., von Wegner, F., Peppel, K., Müller, O.J., Schinkel, S., Rabinowitz, J.E., Hippe, H.-J., Brinks, H., Katus, H.A., Koch, W.J., Eckhart, A.D., Friedrich, O. and Most, P.</td>
+	<td>The inotropic peptide βARKct improves βAR responsiveness in normal and failing cardiomyocytes through G(βγ)-mediated L-type calcium current disinhibition.</td>
+	<td>2011</td>
+	<td>Circ Res<br/>Vol. 108(1), pp. 27-39<i>School</i>: Center for Molecular and Translational Cardiology, University of Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1161/CIRCRESAHA.110.225201">DOI</a> <a href="http://dx.doi.org/10.1161/CIRCRESAHA.110.225201">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wieder2011" class="entry">
+	<td>Wieder, N., Fink, R.H.A. and von Wegner, F.</td>
+	<td>Exact and approximate stochastic simulation of intracellular calcium dynamics.</td>
+	<td>2011</td>
+	<td>J Biomed Biotechnol<br/>Vol. 2011, pp. 572492<i>School</i>: Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, 69120 Heidelberg, Germany. nwieder@ix.urz.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1155/2011/572492">DOI</a> <a href="http://dx.doi.org/10.1155/2011/572492">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wieder2011a" class="entry">
+	<td>Wieder, N., Fink, R. and von Wegner, F.</td>
+	<td>Mesoscopic simulation of subcellular calcium microdomains and calcium-regulated calcium channels.</td>
+	<td>2011</td>
+	<td>&nbsp;</td>
+	<td>book</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="Edwards2010" class="entry">
+	<td>Edwards, J.N., Murphy, R.M., Cully, T.R., von Wegner, F., Friedrich, O. and Launikonis, B.S.</td>
+	<td>Ultra-rapid activation and deactivation of store-operated Ca^2^+ entry in skeletal muscle.</td>
+	<td>2010</td>
+	<td>Cell Calcium<br/>Vol. 47(5), pp. 458-467<i>School</i>: The University of Queensland, Brisbane, Australia.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.ceca.2010.04.001">DOI</a> <a href="http://dx.doi.org/10.1016/j.ceca.2010.04.001">URL</a>&nbsp;</td>
+</tr>
+<tr id="Edwards2010a" class="entry">
+	<td>Edwards, J.N., Friedrich, O., Cully, T.R., von Wegner, F., Murphy, R.M. and Launikonis, B.S.</td>
+	<td>Upregulation of store-operated Ca^2^+ entry in dystrophic mdx mouse muscle.</td>
+	<td>2010</td>
+	<td>Am J Physiol Cell Physiol<br/>Vol. 299(1), pp. C42-C50<i>School</i>: School of Biomedical Sciences, University of Queensland, Brisbane, QLD, Australia.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1152/ajpcell.00524.2009">DOI</a> <a href="http://dx.doi.org/10.1152/ajpcell.00524.2009">URL</a>&nbsp;</td>
+</tr>
+<tr id="Friedrich2010" class="entry">
+	<td>Friedrich, O., Both, M., Weber, C., Schürmann, S., Teichmann, M.D.H., von Wegner, F., Fink, R.H.A., Vogel, M., Chamberlain, J.S. and Garbe, C.</td>
+	<td>Microarchitecture is severely compromised but motor protein function is preserved in dystrophic mdx skeletal muscle.</td>
+	<td>2010</td>
+	<td>Biophys J<br/>Vol. 98(4), pp. 606-616<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, Ruprecht Karls University, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.bpj.2009.11.005">DOI</a> <a href="http://dx.doi.org/10.1016/j.bpj.2009.11.005">URL</a>&nbsp;</td>
+</tr>
+<tr id="Friedrich2010a" class="entry">
+	<td>Friedrich, O., Fink, R.H.A. and von Wegner, F.</td>
+	<td>New factors contributing to dynamic calcium regulation in the skeletal muscle triad - a crowded place</td>
+	<td>2010</td>
+	<td>Biophysical Reviews<br/>Vol. 2, pp. 29-38&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s12551-009-0027-2">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Friedrich2010b" class="entry">
+	<td>Friedrich, O., Hund, E. and von Wegner, F.</td>
+	<td>Enhanced muscle shortening and impaired Ca^2^+ channel function in an acute septic myopathy model.</td>
+	<td>2010</td>
+	<td>J Neurol<br/>Vol. 257(4), pp. 546-555<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, University of Heidelberg, INF 326, 69120, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s00415-009-5362-5">DOI</a> <a href="http://dx.doi.org/10.1007/s00415-009-5362-5">URL</a>&nbsp;</td>
+</tr>
+<tr id="Schuermann2010" class="entry">
+	<td>Schürmann, S., von Wegner, F., Fink, R.H.A., Friedrich, O. and Vogel, M.</td>
+	<td>Second harmonic generation microscopy probes different states of motor protein interaction in myofibrils.</td>
+	<td>2010</td>
+	<td>Biophys J<br/>Vol. 99(6), pp. 1842-1851<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, Heidelberg University, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.bpj.2010.07.005">DOI</a> <a href="http://dx.doi.org/10.1016/j.bpj.2010.07.005">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2010" class="entry">
+	<td>von Wegner, F. and Fink, R.H.A.</td>
+	<td>Stochastic simulation of calcium microdomains in the vicinity of an L-type calcium channel.</td>
+	<td>2010</td>
+	<td>Eur Biophys J<br/>Vol. 39(7), pp. 1079-1088<i>School</i>: Medical Biophysics, Institute for Physiology and Pathophysiology, University of Heidelberg, INF 326, 69120, Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s00249-009-0504-3">DOI</a> <a href="http://dx.doi.org/10.1007/s00249-009-0504-3">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2009" class="entry">
+	<td>von Wegner, F., Schurmann, S., Fink, R.H.A., Vogel, M. and Friedrich, O.</td>
+	<td>Motor protein function in skeletal muscle-a multiple scale approach to contractility.</td>
+	<td>2009</td>
+	<td>IEEE Trans Med Imaging<br/>Vol. 28(10), pp. 1632-1642<i>School</i>: Medical Biophysics Group, Institute of Physiology, University of Heidelberg, 69120 Heidelberg, Germany. fwegner@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1109/TMI.2009.2026171">DOI</a> <a href="http://dx.doi.org/10.1109/TMI.2009.2026171">URL</a>&nbsp;</td>
+</tr>
+<tr id="Friedrich2008" class="entry">
+	<td>Friedrich*, O., von Wegner, F., Chamberlain, J.S., Fink, R.H.A. and Rohrbach, P.</td>
+	<td>L-type Ca^2^+ channel function is linked to dystrophin expression in mammalian muscle.</td>
+	<td>2008</td>
+	<td>PLoS One<br/>Vol. 3(3), pp. e1762<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, University of Heidelberg, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1371/journal.pone.0001762">DOI</a> <a href="http://dx.doi.org/10.1371/journal.pone.0001762">URL</a>&nbsp;</td>
+</tr>
+<tr id="Friedrich2008a" class="entry">
+	<td>Friedrich, O., Weber, C., von Wegner, F., Chamberlain, J.S. and Fink, R.H.A.</td>
+	<td>Unloaded speed of shortening in voltage-clamped intact skeletal muscle fibers from wt, mdx, and transgenic minidystrophin mice using a novel high-speed acquisition system.</td>
+	<td>2008</td>
+	<td>Biophys J<br/>Vol. 94(12), pp. 4751-4765<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, Ruprecht-Karls-University, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1529/biophysj.107.126557">DOI</a> <a href="http://dx.doi.org/10.1529/biophysj.107.126557">URL</a>&nbsp;</td>
+</tr>
+<tr id="Heinzel2008" class="entry">
+	<td>Heinzel, F.R., Bito, V., Biesmans, L., Wu, M., Detre, E., von Wegner, F., Claus, P., Dymarkowski, S., Maes, F., Bogaert, J., Rademakers, F., D'hooge, J. and Sipido, K.</td>
+	<td>Remodeling of T-tubules and reduced synchrony of Ca^2^+ release in myocytes from chronically ischemic myocardium.</td>
+	<td>2008</td>
+	<td>Circ Res<br/>Vol. 102(3), pp. 338-346<i>School</i>: Division of Experimental Cardiology, University Hospital Gasthuisberg and University of Leuven, Belgium.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1161/CIRCRESAHA.107.160085">DOI</a> <a href="http://dx.doi.org/10.1161/CIRCRESAHA.107.160085">URL</a>&nbsp;</td>
+</tr>
+<tr id="Schnee2008" class="entry">
+	<td>Schnee*, S., von Wegner, F., Schürmann, S., Ludwig, H., Fink, R. and Friedrich, O.</td>
+	<td>Microdomain Ca^2^+ dynamics in mammalian muscle following prolonged high pressure treatments</td>
+	<td>2008</td>
+	<td>Journal of Physics: Conference Series<br/>Vol. 121(11), pp. 112003&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1088/1742-6596/121/11/112003">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Teichmann2008" class="entry">
+	<td>Teichmann, M.D.H., von Wegner, F., Fink, R.H.A., Chamberlain, J.S., Launikonis, B.S., Martinac, B. and Friedrich, O.</td>
+	<td>Inhibitory control over Ca^2^+ sparks via mechanosensitive channels is disrupted in dystrophin deficient muscle but restored by mini-dystrophin expression.</td>
+	<td>2008</td>
+	<td>PLoS One<br/>Vol. 3(11), pp. e3644<i>School</i>: Medical Biophysics, Department of Systems Physiology, Institute of Physiology and Pathophysiology, Ruprecht-Karls-University, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1371/journal.pone.0003644">DOI</a> <a href="http://dx.doi.org/10.1371/journal.pone.0003644">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2008" class="entry">
+	<td>von Wegner, F., Ober, T., Weber, C., Schürmann, S., Winter, R., Friedrich, O., Fink, R.H.A. and Vogel, M.</td>
+	<td>Velocity distributions of single F-actin trajectories from a fluorescence image series using trajectory reconstruction and optical flow mapping.</td>
+	<td>2008</td>
+	<td>J Biomed Opt<br/>Vol. 13(5), pp. 054018<i>School</i>: University of Heidelberg, Institute of Physiology and Pathophysiology, Medical Biophysics Group, Im Neuenheimer Feld 326, 69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/1.2982525">DOI</a> <a href="http://dx.doi.org/10.1117/1.2982525">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2008a" class="entry">
+	<td>von Wegner, F., Koyama, S., Miwa, T. and Friedrich, O.</td>
+	<td>Resting membrane potentials recorded on-site in intact skeletal muscles from deep sea fish (Sigmops gracile) salvaged from depths up to 1.000 m.</td>
+	<td>2008</td>
+	<td>Mar Biotechnol (NY)<br/>Vol. 10(4), pp. 478-486<i>School</i>: Pathophysiology, University of Heidelberg, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s10126-008-9085-x">DOI</a> <a href="http://dx.doi.org/10.1007/s10126-008-9085-x">URL</a>&nbsp;</td>
+</tr>
+<tr id="Friedrich2007" class="entry">
+	<td>Friedrich*, O., von Wegner, F., Wink, M. and Fink, R.H.A.</td>
+	<td>Na^+- and K^+-channels as molecular targets of the alkaloid ajmaline in skeletal muscle fibres.</td>
+	<td>2007</td>
+	<td>Br J Pharmacol<br/>Vol. 151(1), pp. 82-93<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, University Heidelberg, Heidelberg, Germany. oliver.friedrich@physiologie.uni-heidelberg.de&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1038/sj.bjp.0707194">DOI</a> <a href="http://dx.doi.org/10.1038/sj.bjp.0707194">URL</a>&nbsp;</td>
+</tr>
+<tr id="Voelkers2007" class="entry">
+	<td>Völkers, M., Loughrey, C.M., Macquaide, N., Remppis, A., DeGeorge, B.R., von Wegner, F., Friedrich, O., Fink, R.H.A., Koch, W.J., Smith, G.L. and Most, P.</td>
+	<td>S100A1 decreases calcium spark frequency and alters their spatial characteristics in permeabilized adult ventricular cardiomyocytes.</td>
+	<td>2007</td>
+	<td>Cell Calcium<br/>Vol. 41(2), pp. 135-143<i>School</i>: Department of Internal Medicine III, Laboratory for Cardiac Stem Cell and Gene Therapy, Division of Cardiology, INF 350, University of Heidelberg, 69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1016/j.ceca.2006.06.001">DOI</a> <a href="http://dx.doi.org/10.1016/j.ceca.2006.06.001">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2007" class="entry">
+	<td>von Wegner, F., Both, M., Fink, R.H.A. and Friedrich, O.</td>
+	<td>Fast XYT imaging of elementary calcium release events in muscle with multifocal multiphoton microscopy and wavelet denoising and detection.</td>
+	<td>2007</td>
+	<td>IEEE Trans Med Imaging<br/>Vol. 26(7), pp. 925-934<i>School</i>: Medical Biophysics Group, Institute of Physiology and Pathophysiology, University of Heidelberg, Heidelberg BW 69120, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1109/TMI.2007.895471">DOI</a> <a href="http://dx.doi.org/10.1109/TMI.2007.895471">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2007a" class="entry">
+	<td>von Wegner, F., Ober, T., Weber, C., Friedrich, O., Fink, R.H.A. and Vogel, M.</td>
+	<td>Multiresolution transform denoising and segmentation of single molecule motility image series</td>
+	<td>2007</td>
+	<td>Proc SPIE - Molecular Imaging<br/>Vol. 6626, pp. 66260Q&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/12.728371">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Friedrich2006" class="entry">
+	<td>Friedrich, O., von Wegner, F., Hartmann, M., Frey, B., Sommer, K., Ludwig, H. and Fink, R.H.A.</td>
+	<td>'In situ' high pressure confocal Ca^2^+-fluorescence microscopy in skeletal muscle: a new method to study pressure limits in mammalian cells.</td>
+	<td>2006</td>
+	<td>Undersea Hyperb Med<br/>Vol. 33(3), pp. 181-195<i>School</i>: Medical Biophysics, Institute of Physiology and Pathophysiology, INF 326, Ruprecht-Karls-University, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td>&nbsp;</td>
+</tr>
+<tr id="Vogel2006" class="entry">
+	<td>Vogel, M., Hahn, D., Schürmann, S., Lang, M., von Wegner, F., Friedrich, O., Engelhardt, J., Hell, S.W. and Fink, R.H.</td>
+	<td>4Pi-SHG imaging of mammalian myofibrillar structures.</td>
+	<td>2006</td>
+	<td>Proc SPIE<br/>Vol. 6089, pp. 300-307&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/12.646638">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Vogel2006a" class="entry">
+	<td>Vogel, M., Schürmann, S., Friedrich, O., von Wegner, F., Both, M. and Fink, R.H.</td>
+	<td>Scanning multi photon microscopy of SHG signals from single myofibrils of mammalian skeletal muscle.</td>
+	<td>2006</td>
+	<td>Proc SPIE<br/>Vol. 6089, pp. 60891J&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/12.646490">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Wegner2006" class="entry">
+	<td>von Wegner, F., Both*, M. and Fink, R.H.A.</td>
+	<td>Automated detection of elementary calcium release events using the &agrave; trous wavelet transform.</td>
+	<td>2006</td>
+	<td>Biophys J<br/>Vol. 90(6), pp. 2151-2163<i>School</i>: Institute of Physiology and Pathophysiology, Medical Biophysics, University of Heidelberg, INF 326, D-69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1529/biophysj.105.069930">DOI</a> <a href="http://dx.doi.org/10.1529/biophysj.105.069930">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2006a" class="entry">
+	<td>von Wegner, F., Both, M., Fink, R.H.A. and Friedrich, O.</td>
+	<td>Elementary Ca^2^+ release events in mammalian skeletal muscle: effects of the anaesthetic drug thiopental.</td>
+	<td>2006</td>
+	<td>J Muscle Res Cell Motil<br/>Vol. 27(5-7), pp. 315-326<i>School</i>: Medical Biophysics, Institute for Physiology and Pathophysiology, University of Heidelberg, INF 326, D-69120, Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1007/s10974-006-9092-3">DOI</a> <a href="http://dx.doi.org/10.1007/s10974-006-9092-3">URL</a>&nbsp;</td>
+</tr>
+<tr id="Wegner2006b" class="entry">
+	<td>von Wegner, F., Both, M., Fink, R. and Friedrich, O.</td>
+	<td>3D high-speed multifocal multiphoton microscopy in muscle and wavelet analysis of fast elementary calcium release events.</td>
+	<td>2006</td>
+	<td>IEEE International Symposium on Biomedical Imaging, pp. 1148-1151&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1109/ISBI.2006.1625126">DOI</a> &nbsp;</td>
+</tr>
+<tr id="Askoxylakis2005" class="entry">
+	<td>Askoxylakis, V., Zitzmann, S., Mier, W., Graham, K., Kr&auml;mer, S., von Wegner, F., Fink, R.H.A., Schwab, M., Eisenhut, M. and Haberkorn, U.</td>
+	<td>Preclinical evaluation of the breast cancer cell-binding peptide, p160.</td>
+	<td>2005</td>
+	<td>Clin Cancer Res<br/>Vol. 11(18), pp. 6705-6712<i>School</i>: Clinical Cooperation Unit Nuclear Medicine, German Cancer Research Center, University of Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1158/1078-0432.CCR-05-0432">DOI</a> <a href="http://dx.doi.org/10.1158/1078-0432.CCR-05-0432">URL</a>&nbsp;</td>
+</tr>
+<tr id="Both2004" class="entry">
+	<td>Both, M., Vogel, M., Friedrich, O., von Wegner, F., Künsting, T., Fink, R.H.A. and Uttenweiler, D.</td>
+	<td>Second harmonic imaging of intrinsic signals in muscle fibers in situ.</td>
+	<td>2004</td>
+	<td>J Biomed Opt<br/>Vol. 9(5), pp. 882-892<i>School</i>: Ruprecht-Karls-Universitat, Institut fur Physiologie und Pathophysiologie, Medical Biophysics Unit, Im Neuenheimer Feld 326, D-69120 Heidelberg, Germany.&nbsp;</td>
+	<td>article</td>
+	<td><a href="http://doi.org/10.1117/1.1783354">DOI</a> <a href="http://dx.doi.org/10.1117/1.1783354">URL</a>&nbsp;</td>
+</tr>
+</tbody>
+</table>
+<footer>
+ <small>Created by <a href="http://jabref.sourceforge.net">JabRef</a> on 23/12/2021.</small>
+</footer>
+
+<!-- file generated by JabRef -->
+
+</body>
+</html>
