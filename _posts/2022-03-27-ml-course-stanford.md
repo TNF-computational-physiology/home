@@ -10,6 +10,8 @@ as checkpoints.
 
 **Programming language**: Matlab / Octave
 
+**Price**: 99 AUD
+
 **Syllabus**:
 - Week 1: 
   - Introduction (2h)
