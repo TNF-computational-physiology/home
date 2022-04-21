@@ -6,7 +6,7 @@ categories: misc
 
 As I am planning to use more computational notebooks (Jupyter, Python) for my online teaching in physiology and neuroscience, 
 I completed the Kaggle ML short courses over the last few weeks. The learning units are very concise and accompanied by notebooks with unit
-tests to verify student code. Digital certificates are given upon successful completion of all notebooks.  
+tests to verify student code. Digital certificates are given upon successful completion of each notebook.  
 
 Available courses are:
 1. [Python](https://www.kaggle.com/learn/python) (approx. 5h)
