@@ -44,3 +44,5 @@ A few open EEG databases to explore:
   - some contain respiration and body temperature
   - manually scored hypnograms according to Rechtschaffen and Kales 
   - [download (8.1 GB)](https://physionet.org/content/sleep-edfx/1.0.0)
+
+8. to be continued...
