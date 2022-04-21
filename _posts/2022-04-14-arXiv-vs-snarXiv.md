@@ -4,7 +4,7 @@ title: "Machine learning arXiv-vs-snarXiv"
 categories: misc
 ---
 
-The arXiv-vs-snarXiv challenge can be machine-learned quite easily!
+The arXiv-vs-snarXiv challenge can be machine-learned quite easily!  
 Check:
-- https://github.com/Frederic-vW/arXiv-vs-snarXiv or
-- https://www.kaggle.com/code/frederic2016/snarxiv-learn
+- [my github repo](https://github.com/Frederic-vW/arXiv-vs-snarXiv) or
+- [the Kaggle version](https://www.kaggle.com/code/frederic2016/snarxiv-learn)
