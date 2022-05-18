@@ -6,7 +6,7 @@ permalink: /teaching/
 
 Thesis info:
 ---
-- [info slide show](https://tnf-computational-physiology.github.io/slides/thesis-info.html)
+- [SoMS Research Info Session July 6 2022](https://tnf-computational-physiology.github.io/slides/thesis-info.html)
 
 Moodle utils:
 ---
