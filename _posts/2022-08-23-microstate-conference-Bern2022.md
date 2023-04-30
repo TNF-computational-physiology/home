@@ -16,3 +16,5 @@ Verena Brodbeck, Inken Tödt, Frederic von Wegner
 **Our talk:**  
 "Effects of propofol on EEG microstate sequences. Predictability & Periodicity."  
 Gesine Hermann, Helmut Laufs, Enzo Tagliazucchi, Inken Tödt, Frederic von Wegner
+
+Funded by: DFG, project number 440536202
