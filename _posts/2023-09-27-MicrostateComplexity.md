@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Complexity Measures for EEG Microstate Sequences: Concepts and Algorithms"
+title: "Complexity Measures for EEG Microstate Sequences update"
 categories: misc
 ---
 
